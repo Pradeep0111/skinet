@@ -11,9 +11,10 @@ namespace API.Controllers
     {
 
         [HttpGet]
-        public async Task<ActionResult<IReadOnlyList<Product>>> GetProducts()
+        public async Task<ActionResult<IReadOnlyList<Product>>> GetProducts(string? brand, string? type, 
+            string? sort)
         {
-            return Ok(await repo.GetProductsAsync());
+            return Ok(await repo.GetProductsAsync(brand, type, sort));
         }
         [HttpGet("{id:int}")]
         public async Task<ActionResult<Product>> GetProduct(int id)
@@ -79,7 +80,7 @@ namespace API.Controllers
         [HttpGet("types")]
         public async Task<ActionResult<IReadOnlyList<string>>> GetTypes()
         {
-            return Ok(await repo.GetTypesAsync());
+            return Ok(await repo.GetTypesAsync ());
         }
         private bool ProductExists(int id)
         {
