@@ -1,5 +1,0 @@
-@import "tailwindcss";
-
-.container {
-  @apply mx-auto max-w-screen px-6;
-}
