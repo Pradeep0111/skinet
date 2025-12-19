@@ -14,33 +14,5 @@ import { ShopComponent } from "./features/shop/shop.component";
   styleUrl: './app.component.scss'
 })
 export class AppComponent{
-  // baseUrl = 'https://localhost:5000/api/';
-  // private http = inject(HttpClient);
-  // products: any[] = []
-  // ngOnInit(): void {
-  //   this.shop.getProducts().subscribe({
-  //   next: response => {
-  //     console.log('API response:', response);
-  //     this.products = response.data;
-  //     console.log('Products array:', this.products);
-  //   },
-  //   error: error => console.error('API error:', error)
-  // });
-  // }
-  // private shop = inject(ShopService)
   title = 'Skinet';
-  // products: Product[] = [];
-
-
-
-  // ngOnInit(): void {
-  //   this.shop.getProducts().subscribe({
-  //     next: response => this.products = response.data,
-  //   //   next: response => {
-  //   //   console.log('Products received:', response);
-  //   //   this.products = response.data;
-  //   // },
-  //     error: error => console.log(error)
-  //   })
-  // }
 }
