@@ -59,3 +59,19 @@ body {
 .mdc-notched-outline__notch {
   border-right: none !important;
 }
+
+.snackbar-error{
+  @include mat.snack-bar-overrides((
+    button-color: white,
+    container-color: rgba(207, 1, 1, 0.877),
+    supporting-text-color: white
+  ));
+}
+
+.snackbar-success{
+  @include mat.snack-bar-overrides((
+    button-color: white,
+    container-color: rgba(3, 195, 3, 0.918),
+    supporting-text-color: white
+  ));
+}
