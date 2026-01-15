@@ -16,7 +16,7 @@ namespace API.DTOs
         public string Type { get; set; } = string.Empty;
         [Required] 
         public string Brand { get; set; } = string.Empty;
-        [Range(1, int.MaxValue, ErrorMessage = "Quatity in stock must be at least 1")]
-        public int QuatityInStock { get; set; }
+        [Range(1, int.MaxValue, ErrorMessage = "Quantity in stock must be at least 1")]
+        public int QuantityInStock { get; set; }
     }
 }
