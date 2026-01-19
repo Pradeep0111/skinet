@@ -12,8 +12,16 @@
                 matBadgeSize="large" class="custom-badge mt-2 mr-2">
                 <mat-icon>shopping_cart</mat-icon>
             </a>
-            <button matButton="outlined">Login</button>
-            <button matButton="outlined">Register</button>
+            @if (accountService.currentUser()) {
+                <button mat-button [matMenuTriggerFor]="menu">
+                    <mat-icon>arrow_drop_down</mat-icon>
+                    <span>{{accountService.currentUser()?.email}}</span>
+                </button>
+            }
+            @else {
+                <button routerLink="/account/login" matButton="outlined">Login</button>
+                <button routerLink="/account/register" matButton="outlined">Register</button>
+            }
         </div>
     </div>
 </header>
@@ -21,3 +29,19 @@
 @if(busyService.loading){
     <mat-progress-bar mode="indeterminate" class="top-20 z-50"></mat-progress-bar>
 }
+
+<mat-menu #menu="matMenu" class="px-5">
+    <button mat-menu-item class="px-3" routerLink="/cart">
+        <mat-icon>shopping_cart</mat-icon>
+        My cart
+    </button>
+    <button mat-menu-item class="px-3" routerLink="/orders">
+        <mat-icon>history</mat-icon>
+        My orders
+    </button>
+    <mat-divider></mat-divider>
+    <button mat-menu-item class="px-3" (click)="logout()">
+        <mat-icon>logout</mat-icon>
+        Logout
+    </button>
+</mat-menu>

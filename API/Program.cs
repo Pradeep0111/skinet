@@ -43,7 +43,7 @@ app.UseCors(x => x
     .WithOrigins("http://localhost:4200", "https://localhost:4200"));
 
 app.MapControllers();
-app.MapGroup("api").MapIdentityApi<AppUser>(); //api/{controller}/login
+app.MapGroup("api").MapIdentityApi<AppUser>(); //api/login
 
 try
 {
