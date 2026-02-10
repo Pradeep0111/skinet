@@ -4,15 +4,12 @@ import { AccountService } from '../../../Core/services/account.service';
 import { Router } from '@angular/router';
 import { SnackbarService } from '../../../Core/services/snackbar.service';
 import { MatCard } from "@angular/material/card";
-import { MatFormField, MatLabel, MatError } from "@angular/material/form-field";
 import { MatButton } from "@angular/material/button";
-import { MatInput } from "@angular/material/input";
-import { JsonPipe } from "@angular/common";
 import { TextInputComponent } from "../../../shared/components/text-input/text-input.component";
 
 @Component({
   selector: 'app-register',
-  imports: [MatCard, ReactiveFormsModule, MatFormField, MatLabel, MatButton, MatInput, JsonPipe, MatError, TextInputComponent],
+  imports: [MatCard, ReactiveFormsModule, MatButton, TextInputComponent],
   templateUrl: './register.component.html',
   styleUrl: './register.component.scss',
 })

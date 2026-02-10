@@ -4,7 +4,7 @@ import { MatAnchor, MatButton } from "@angular/material/button";
 import { MatFormField, MatLabel } from "@angular/material/form-field";
 import { MatInput } from "@angular/material/input";
 import { CartService } from '../../../Core/services/cart.service';
-import { CurrencyPipe } from "@angular/common";
+import { CurrencyPipe, Location } from "@angular/common";
 
 @Component({
   selector: 'app-order-summary',
@@ -14,5 +14,6 @@ import { CurrencyPipe } from "@angular/common";
 })
 export class OrderSummaryComponent {
   cartService = inject(CartService);
+  location = inject(Location);
   
 }
