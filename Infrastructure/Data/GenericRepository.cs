@@ -60,10 +60,6 @@ namespace Infrastructure.Data
             context.Set<T>().Remove(entity);
         }
 
-        public async Task<bool> SaveAllAsync()
-        {
-            return await context.SaveChangesAsync() > 0;
-        }
 
         public void Update(T entity)
         {
