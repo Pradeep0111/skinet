@@ -16,6 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
+	<None Include="Data\SeedData\**" CopyToOutputDirectory="PreserveNewest"/>
     <ProjectReference Include="..\core\Core.csproj" />
   </ItemGroup>
 
