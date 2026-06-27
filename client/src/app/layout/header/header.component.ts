@@ -9,11 +9,11 @@ import { CartService } from '../../Core/services/cart.service';
 import { AccountService } from '../../Core/services/account.service';
 import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
 import { MatDivider } from "@angular/material/divider";
-
+import { IsAdminDirective } from "../../shared/directives/is-admin.directives";
 
 @Component({
   selector: 'app-header',
-  imports: [MatBadgeModule, MatIcon, MatButtonModule, RouterLink, RouterLinkActive, MatProgressBar, MatMenuTrigger, MatMenu, MatMenuItem, MatDivider],
+  imports: [MatBadgeModule, MatIcon, MatButtonModule, RouterLink, RouterLinkActive, MatProgressBar, MatMenuTrigger, MatMenu, MatMenuItem, MatDivider, IsAdminDirective],
   templateUrl: './header.component.html',
   styleUrl: './header.component.scss',
 })
