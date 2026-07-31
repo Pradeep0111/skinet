@@ -1,0 +1,78 @@
+Metadata-Version: 2.4
+Name: skinet-shopping-ai
+Version: 0.1.0
+Summary: Internal AI shopping assistant service for Skinet
+Requires-Python: >=3.12
+Description-Content-Type: text/markdown
+Requires-Dist: anthropic
+Requires-Dist: fastapi<1.0,>=0.115
+Requires-Dist: pydantic-settings<3.0,>=2.6
+Requires-Dist: redis
+Requires-Dist: uvicorn[standard]<1.0,>=0.32
+Provides-Extra: dev
+Requires-Dist: httpx2; extra == "dev"
+Requires-Dist: pytest<9.0,>=8.3; extra == "dev"
+Requires-Dist: pytest-asyncio<1.0,>=0.24; extra == "dev"
+Requires-Dist: ruff<1.0,>=0.8; extra == "dev"
+
+# Skinet Shopping AI
+
+Internal FastAPI service for the Skinet shopping assistant. Browser traffic must go through
+the ASP.NET gateway; this service does not accept Identity cookies, access SQL Server, or
+write shopping carts.
+
+## Week 1 scope
+
+- FastAPI application factory and `/health` endpoint
+- environment-based settings with safe defaults
+- request IDs and structured request logging without bodies or query strings
+- camelCase product/chat contracts backed by JSON fixtures
+- deterministic mock LLM provider for independent development
+- pytest and Ruff configuration
+
+Claude, Redis persistence, .NET catalog calls, and LangGraph tools are intentionally scheduled
+for later weeks.
+
+## Local setup with uv
+
+Install [uv](https://docs.astral.sh/uv/) first. `uv` can install Python 3.12, create the
+project virtual environment, and synchronize development dependencies.
+
+```powershell
+cd shopping-ai
+uv python install 3.12
+uv venv --python 3.12
+uv sync --extra dev
+Copy-Item .env.example .env
+```
+
+Activation is optional because `uv run` automatically uses `.venv`. To activate it manually,
+run `.\.venv\Scripts\Activate.ps1`. Keep `LLM_PROVIDER=mock` until the Claude adapter is
+implemented. Never commit `.env` or API keys.
+
+## Run and verify
+
+```powershell
+uv run uvicorn app.main:app --reload --reload-dir app --port 8000
+Invoke-RestMethod http://localhost:8000/health
+uv run pytest
+uv run ruff check .
+```
+
+Expected health response:
+
+```json
+{"status":"ok","service":"skinet-shopping-ai","version":"0.1.0"}
+```
+
+The .NET development API is configured as `https://localhost:5000`, matching the existing
+Skinet launch profile. A separate service credential will protect catalog synchronization.
+
+`--reload-dir app` prevents Uvicorn from watching `.venv`, test caches, and other project files.
+Without it, installing dependencies while the server is running can trigger repeated reloads.
+
+## Contract handoff
+
+Files under `tests/fixtures/` are the AI-side Gate 0 proposal. The .NET developer must review
+them against `dotnet_plan.md`, then publish the accepted canonical fixtures under
+`skinet/docs/contracts/`. After acceptance, changes require coordination between both tracks.

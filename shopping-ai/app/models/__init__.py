@@ -1,0 +1,31 @@
+from app.models.contracts import (
+    AssistantProduct,
+    CartContext,
+    CartContextItem,
+    ChatRequest,
+    ChatResponse,
+    ErrorResponse,
+    InternalChatRequest,
+    NutritionFacts,
+    ProductComparison,
+    ProductPreference,
+    Promotion,
+    ProposedAction,
+    ShopperContext,
+)
+
+__all__ = [
+    "AssistantProduct",
+    "CartContext",
+    "CartContextItem",
+    "ChatRequest",
+    "ChatResponse",
+    "ErrorResponse",
+    "InternalChatRequest",
+    "NutritionFacts",
+    "ProductComparison",
+    "ProductPreference",
+    "Promotion",
+    "ProposedAction",
+    "ShopperContext",
+]

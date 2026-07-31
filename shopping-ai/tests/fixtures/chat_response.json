@@ -1,0 +1,52 @@
+{
+  "conversationId": "conversation-001",
+  "message": "Bananas are available and currently on promotion.",
+  "products": [
+    {
+      "id": 1,
+      "name": "Bananas",
+      "description": "Fresh bananas",
+      "price": 1.99,
+      "effectivePrice": 1.49,
+      "pictureUrl": "/images/products/bananas.png",
+      "brand": "Fresh Market",
+      "type": "Fruit",
+      "category": "Groceries",
+      "subcategory": "Fresh Fruit",
+      "quantityInStock": 40,
+      "sku": "FRUIT-BANANA",
+      "unitSize": 1,
+      "unitLabel": "kg",
+      "tags": ["fresh"],
+      "dietaryLabels": ["vegan"],
+      "allergens": [],
+      "ingredients": null,
+      "nutrition": null,
+      "origin": "India",
+      "storageInstructions": "Store in a cool, dry place",
+      "shelfLifeDays": 7,
+      "averageRating": 4.5,
+      "reviewCount": 18,
+      "promotion": {
+        "salePrice": 1.49,
+        "label": "Introductory offer",
+        "startsAt": null,
+        "endsAt": null
+      },
+      "substitutionGroup": "banana"
+    }
+  ],
+  "comparisons": [],
+  "proposedActions": [
+    {
+      "actionId": "action-001",
+      "actionType": "add_to_cart",
+      "productId": 1,
+      "quantity": 1,
+      "label": "Add bananas to cart",
+      "requiresConfirmation": true
+    }
+  ],
+  "suggestedPrompts": ["Compare with organic bananas", "Show similar fruit"]
+}
+

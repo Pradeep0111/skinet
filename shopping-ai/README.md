@@ -1,0 +1,85 @@
+# Skinet Shopping AI
+
+Internal FastAPI service for the Skinet shopping assistant. Browser traffic must go through
+the ASP.NET gateway; this service does not accept Identity cookies, access SQL Server, or
+write shopping carts.
+
+## Implemented scope
+
+- FastAPI application factory and `/health` endpoint
+- environment-based settings with safe defaults
+- request IDs and structured request logging without bodies or query strings
+- camelCase product/chat contracts backed by JSON fixtures
+- deterministic mock LLM provider for independent development
+- pytest and Ruff configuration
+- configurable async Claude provider using the official Anthropic SDK
+- memory and Redis conversation stores with bounded history and a 24-hour default TTL
+- protected `POST /internal/chat` endpoint with safe errors and strict request validation
+- rejection of unknown fields so PII cannot silently enter the AI service contract
+
+.NET catalog calls and LangGraph tools are intentionally scheduled for later weeks. The current
+chat endpoint returns conversational text only; it does not return products or cart actions yet.
+
+## Local setup with uv
+
+Install [uv](https://docs.astral.sh/uv/) first. `uv` can install Python 3.12, create the
+project virtual environment, and synchronize development dependencies.
+
+```powershell
+cd shopping-ai
+uv python install 3.12
+uv venv --python 3.12
+uv sync --extra dev
+Copy-Item .env.example .env
+```
+
+Activation is optional because `uv run` automatically uses `.venv`. To activate it manually,
+run `.\.venv\Scripts\Activate.ps1`. Keep `LLM_PROVIDER=mock` for deterministic local development
+unless you intentionally want to call Claude. Never commit `.env` or API keys.
+
+Set a local-only `INTERNAL_SERVICE_KEY` before calling `/internal/chat`. The default
+`CONVERSATION_BACKEND=memory` requires no infrastructure. To exercise Redis storage, change it to
+`redis` and ensure the Skinet Redis service is running. To use Claude instead of the deterministic
+mock, set `LLM_PROVIDER=anthropic`, `ANTHROPIC_API_KEY`, and `ANTHROPIC_MODEL`.
+
+## Run and verify
+
+```powershell
+uv run uvicorn app.main:app --reload --reload-dir app --port 8000
+Invoke-RestMethod http://localhost:8000/health
+uv run pytest
+uv run ruff check .
+```
+
+Expected health response:
+
+```json
+{"status":"ok","service":"skinet-shopping-ai","version":"0.1.0"}
+```
+
+The .NET development API is configured as `https://localhost:5000`, matching the existing
+Skinet launch profile. A separate service credential will protect catalog synchronization.
+
+`--reload-dir app` prevents Uvicorn from watching `.venv`, test caches, and other project files.
+Without it, installing dependencies while the server is running can trigger repeated reloads.
+
+Test the protected mock chat endpoint from PowerShell:
+
+```powershell
+$headers = @{ "X-Assistant-Service-Key" = "your-local-secret" }
+$body = @{ message = "Help me find fruit" } | ConvertTo-Json
+Invoke-RestMethod `
+  -Method Post `
+  -Uri http://localhost:8000/internal/chat `
+  -Headers $headers `
+  -ContentType "application/json" `
+  -Body $body
+```
+
+The header value must match `INTERNAL_SERVICE_KEY` in the untracked `.env` file.
+
+## Contract handoff
+
+Files under `tests/fixtures/` are the AI-side Gate 0 proposal. The .NET developer must review
+them against `dotnet_plan.md`, then publish the accepted canonical fixtures under
+`skinet/docs/contracts/`. After acceptance, changes require coordination between both tracks.

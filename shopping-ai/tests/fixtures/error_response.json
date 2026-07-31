@@ -1,0 +1,7 @@
+{
+  "errorCode": "assistant_unavailable",
+  "message": "The shopping assistant is temporarily unavailable.",
+  "retryable": true,
+  "correlationId": "request-001"
+}
+

@@ -1,0 +1,23 @@
+{
+  "message": "Show me fruit I may like",
+  "conversationId": "conversation-001",
+  "cart": {
+    "items": [
+      {
+        "productId": 1,
+        "quantity": 2
+      }
+    ]
+  },
+  "shopper": {
+    "isAuthenticated": true,
+    "preferences": [
+      {
+        "productId": 1,
+        "purchaseCount": 3,
+        "lastPurchasedAt": "2026-07-20T10:00:00Z"
+      }
+    ]
+  }
+}
+

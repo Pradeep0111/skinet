@@ -1,0 +1,34 @@
+{
+  "id": 1,
+  "name": "Bananas",
+  "description": "Fresh bananas",
+  "price": 1.99,
+  "effectivePrice": 1.49,
+  "pictureUrl": "/images/products/bananas.png",
+  "brand": "Fresh Market",
+  "type": "Fruit",
+  "category": "Groceries",
+  "subcategory": "Fresh Fruit",
+  "quantityInStock": 40,
+  "sku": "FRUIT-BANANA",
+  "unitSize": 1,
+  "unitLabel": "kg",
+  "tags": ["fresh"],
+  "dietaryLabels": ["vegan"],
+  "allergens": [],
+  "ingredients": null,
+  "nutrition": null,
+  "origin": "India",
+  "storageInstructions": "Store in a cool, dry place",
+  "shelfLifeDays": 7,
+  "averageRating": 4.5,
+  "reviewCount": 18,
+  "promotion": {
+    "salePrice": 1.49,
+    "label": "Introductory offer",
+    "startsAt": null,
+    "endsAt": null
+  },
+  "substitutionGroup": "banana"
+}
+
