@@ -4,6 +4,7 @@ using Core.Entities;
 using Core.Interfaces;
 using Infrastructure.Data;
 using Infrastructure.Services;
+using API.Services.Assistant;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using StackExchange.Redis;
@@ -34,6 +35,13 @@ builder.Services.AddIdentityApiEndpoints<AppUser>()
     .AddEntityFrameworkStores<StoreContext>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<ICouponService, CouponService>();
+builder.Services.AddScoped<IAssistantContextService, AssistantContextService>();
+builder.Services.AddHttpClient<IAssistantClient, AssistantClient>(client =>
+{
+    var baseUrl = builder.Configuration["Assistant:BaseUrl"] ?? "http://localhost:8000";
+    client.BaseAddress = new Uri(baseUrl);
+    client.Timeout = TimeSpan.FromSeconds(builder.Configuration.GetValue<int?>("Assistant:TimeoutSeconds") ?? 30);
+});
 builder.Services.AddSignalR();
 
 

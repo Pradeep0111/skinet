@@ -31,7 +31,46 @@ namespace Core.Specifications
             }
         }
 
+        private List<string> _categories = [];
+
+        public List<string> Categories
+        {
+            get => _categories;
+            set
+            {
+                _categories = value.SelectMany(x => x.Split(',', StringSplitOptions.RemoveEmptyEntries)).ToList();
+            }
+        }
+
+        private List<string> _dietaryLabels = [];
+
+        public List<string> DietaryLabels
+        {
+            get => _dietaryLabels;
+            set
+            {
+                _dietaryLabels = value.SelectMany(x => x.Split(',', StringSplitOptions.RemoveEmptyEntries)).ToList();
+            }
+        }
+
+        private List<string> _allergensExcluded = [];
+
+        public List<string> AllergensExcluded
+        {
+            get => _allergensExcluded;
+            set
+            {
+                _allergensExcluded = value.SelectMany(x => x.Split(',', StringSplitOptions.RemoveEmptyEntries)).ToList();
+            }
+        }
+
         public string? Sort { get; set; }
+
+        public decimal? MinPrice { get; set; }
+
+        public decimal? MaxPrice { get; set; }
+
+        public bool? InStock { get; set; }
 
         private string? _search;
 
