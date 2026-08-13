@@ -16,9 +16,18 @@ write shopping carts.
 - memory and Redis conversation stores with bounded history and a 24-hour default TTL
 - protected `POST /internal/chat` endpoint with safe errors and strict request validation
 - rejection of unknown fields so PII cannot silently enter the AI service contract
+- async, service-authenticated .NET catalog client with strict paginated response validation
+- read-only keyword search, product-details, and current-stock tools for Week 4 orchestration
+- mocked HTTP coverage for catalog filters, pagination, upstream failures, and contract failures
+- deterministic LangGraph routing for search, details, stock, comparison, and substitutions
+- confirmation-only `add_to_cart` proposals that re-check current stock but never mutate a cart
+- an explicit tool allowlist with no cart-write, order, payment, or admin operation
 
-.NET catalog calls and LangGraph tools are intentionally scheduled for later weeks. The current
-chat endpoint returns conversational text only; it does not return products or cart actions yet.
+The Week 3 catalog boundary is implemented and tested against fixtures and mocked HTTP responses.
+Real catalog calls remain blocked until the .NET developer publishes `/api/assistant/catalog` and
+Gate 1 passes. The Week 4 graph is compiled and registered in application state, but the current
+chat endpoint still uses the Week 2 conversational path. Connecting graph output to
+`/internal/chat` is Week 5 work and requires the frozen gateway contract.
 
 ## Local setup with uv
 
@@ -58,7 +67,9 @@ Expected health response:
 ```
 
 The .NET development API is configured as `https://localhost:5000`, matching the existing
-Skinet launch profile. A separate service credential will protect catalog synchronization.
+Skinet launch profile. `DOTNET_SERVICE_KEY` is sent only in the
+`X-Assistant-Service-Key` header. Keep `DOTNET_VERIFY_TLS=true`; set it to `false` only for a local
+self-signed development certificate. Staging and production require the service key.
 
 `--reload-dir app` prevents Uvicorn from watching `.venv`, test caches, and other project files.
 Without it, installing dependencies while the server is running can trigger repeated reloads.
