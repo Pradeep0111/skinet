@@ -1,4 +1,6 @@
-﻿using API.RequestHelper;
+﻿using API.DTOs;
+using API.Extensions;
+using API.RequestHelper;
 using Core.Entities;
 using Core.Interfaces;
 using Core.Specifications;
@@ -29,8 +31,20 @@ namespace API.Controllers
 
         [Authorize(Roles ="Admin")]
         [HttpPost]
-        public async Task<ActionResult<Product>> CreateProduct(Product product)
+        public async Task<ActionResult<Product>> CreateProduct(CreateProductDTO dto)
         {
+            var validationErrors = dto.GetValidationErrors();
+            if (validationErrors.Count > 0) return BadRequest(new ValidationProblemDetails(validationErrors));
+
+            var product = new Product
+            {
+                Name = dto.Name,
+                Description = dto.Description,
+                PictureUrl = dto.PictureUrl,
+                Type = dto.Type,
+                Brand = dto.Brand
+            };
+            dto.ApplyTo(product);
             unit.Repository<Product>().Add(product);
 
             if (await unit.Complete())
@@ -43,12 +57,16 @@ namespace API.Controllers
 
         [Authorize(Roles = "Admin")]
         [HttpPut("{id:int}")]
-        public async Task<ActionResult> UpdateProduct(int id, Product product)
+        public async Task<ActionResult> UpdateProduct(int id, UpdateProductDTO dto)
         {
-            if (product.Id != id || !ProductExists(id))
-                return BadRequest("Cannot update the unavailable product");
+            var validationErrors = dto.GetValidationErrors();
+            if (validationErrors.Count > 0) return BadRequest(new ValidationProblemDetails(validationErrors));
 
-            unit.Repository<Product>().Update(product);
+            var specification = new ProductByIdSpecification(id);
+            var product = await unit.Repository<Product>().GetEntityWithSpec(specification);
+            if (product == null) return NotFound();
+
+            dto.ApplyTo(product);
 
             if (await unit.Complete())
             {
@@ -91,10 +109,6 @@ namespace API.Controllers
             var spec = new TypeListSpecification();
 
             return Ok(await unit.Repository<Product>().ListAsync(spec));
-        }
-        private bool ProductExists(int id)
-        {
-            return unit.Repository<Product>().Exists(id);
         }
     }
 }
