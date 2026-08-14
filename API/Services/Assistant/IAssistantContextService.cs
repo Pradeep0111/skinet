@@ -6,7 +6,7 @@ namespace API.Services.Assistant;
 public interface IAssistantContextService
 {
     Task<List<CartItemContext>> BuildCartContextAsync(string? cartId);
-    Task<List<PurchaseHistoryContext>> BuildPurchaseHistoryAsync(ClaimsPrincipal user);
+    Task<List<ProductPreferenceContext>> BuildPurchaseHistoryAsync(ClaimsPrincipal user);
     bool ValidateServiceKey(string? serviceKey);
     ChatResponseDto CreateUnavailableResponse(string conversationId);
 }

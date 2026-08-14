@@ -4,8 +4,8 @@ public class Promotion
 {
     public decimal SalePrice { get; set; }
     public string? Label { get; set; }
-    public DateTime? StartDate { get; set; }
-    public DateTime? EndDate { get; set; }
+    public DateTime? StartsAt { get; set; }
+    public DateTime? EndsAt { get; set; }
     public bool IsActive { get; set; }
 
     public bool IsCurrentlyActive()
@@ -13,7 +13,7 @@ public class Promotion
         if (!IsActive) return false;
 
         var now = DateTime.UtcNow;
-        return (!StartDate.HasValue || StartDate <= now)
-            && (!EndDate.HasValue || EndDate >= now);
+        return (!StartsAt.HasValue || StartsAt <= now)
+            && (!EndsAt.HasValue || EndsAt >= now);
     }
 }

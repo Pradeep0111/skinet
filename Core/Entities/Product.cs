@@ -19,11 +19,12 @@ public class Product : BaseEntity
     public string? Ingredients { get; set; }
     public string? Origin { get; set; }
     public string? StorageInstructions { get; set; }
-    public string? ShelfLifeGuidance { get; set; }
+    public int? ShelfLifeDays { get; set; }
     public decimal? AverageRating { get; set; }
     public int? ReviewCount { get; set; }
     public string? SubstitutionGroup { get; set; }
     public NutritionFacts? Nutrition { get; set; }
     public Promotion? Promotion { get; set; }
     public ICollection<ProductAttribute> Attributes { get; set; } = [];
+    
 }

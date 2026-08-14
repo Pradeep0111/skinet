@@ -73,8 +73,11 @@ public class AssistantClient(HttpClient httpClient, IConfiguration configuration
             return false;
 
         return response.ProposedActions.All(action =>
-            AllowedActionTypes.Contains(action.Type)
+            AllowedActionTypes.Contains(action.ActionType)
+            && action.RequiresConfirmation
+            && !string.IsNullOrWhiteSpace(action.ActionId)
+            && !string.IsNullOrWhiteSpace(action.Label)
             && action.ProductId > 0
-            && action.Quantity is > 0 and <= 100);
+            && action.Quantity is > 0 and <= 99);
     }
 }

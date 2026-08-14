@@ -1,23 +1,33 @@
 namespace API.Services.Assistant;
 
-public class AssistantChatRequest
+public sealed class AssistantChatRequest
 {
-    public string Message { get; set; } = string.Empty;
-    public string ConversationId { get; set; } = string.Empty;
-    public List<CartItemContext> CartItems { get; set; } = [];
-    public List<PurchaseHistoryContext> PurchaseHistory { get; set; } = [];
+    public required string Message { get; set; }
+    public required string ConversationId { get; set; }
+    public AssistantCartContext Cart { get; set; } = new();
+    public AssistantShopperContext Shopper { get; set; } = new();
 }
 
-public class CartItemContext
+public sealed class AssistantCartContext
+{
+    public List<CartItemContext> Items { get; set; } = [];
+}
+
+public sealed class CartItemContext
 {
     public int ProductId { get; set; }
     public int Quantity { get; set; }
 }
 
-public class PurchaseHistoryContext
+public sealed class AssistantShopperContext
+{
+    public bool IsAuthenticated { get; set; }
+    public List<ProductPreferenceContext> Preferences { get; set; } = [];
+}
+
+public sealed class ProductPreferenceContext
 {
     public int ProductId { get; set; }
-    public int TotalQuantity { get; set; }
     public int PurchaseCount { get; set; }
-    public DateTime LastPurchased { get; set; }
+    public DateTimeOffset? LastPurchasedAt { get; set; }
 }

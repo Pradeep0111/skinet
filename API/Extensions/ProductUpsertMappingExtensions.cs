@@ -22,7 +22,7 @@ public static class ProductUpsertMappingExtensions
         product.Ingredients = dto.Ingredients;
         product.Origin = dto.Origin;
         product.StorageInstructions = dto.StorageInstructions;
-        product.ShelfLifeGuidance = dto.ShelfLifeGuidance;
+        product.ShelfLifeDays = dto.ShelfLifeDays;
         product.AverageRating = dto.AverageRating;
         product.ReviewCount = dto.ReviewCount;
         product.SubstitutionGroup = dto.SubstitutionGroup;
@@ -41,8 +41,8 @@ public static class ProductUpsertMappingExtensions
         {
             SalePrice = dto.Promotion.SalePrice,
             Label = dto.Promotion.Label,
-            StartDate = dto.Promotion.StartDate,
-            EndDate = dto.Promotion.EndDate,
+            StartsAt = dto.Promotion.StartsAt,
+            EndsAt = dto.Promotion.EndsAt,
             IsActive = dto.Promotion.IsActive
         };
 
@@ -64,9 +64,9 @@ public static class ProductUpsertMappingExtensions
             if (dto.Promotion.SalePrice <= 0 || dto.Promotion.SalePrice > dto.Price)
                 errors[nameof(dto.Promotion.SalePrice)] = ["Sale price must be greater than zero and cannot exceed the regular price."];
 
-            if (dto.Promotion.StartDate.HasValue && dto.Promotion.EndDate.HasValue
-                && dto.Promotion.EndDate < dto.Promotion.StartDate)
-                errors[nameof(dto.Promotion.EndDate)] = ["Promotion end date must be on or after its start date."];
+            if (dto.Promotion.StartsAt.HasValue && dto.Promotion.EndsAt.HasValue
+                && dto.Promotion.EndsAt < dto.Promotion.StartsAt)
+                errors[nameof(dto.Promotion.EndsAt)] = ["Promotion end date must be on or after its start date."];
         }
 
         if (dto.Nutrition != null && HasNegativeValue(dto.Nutrition))

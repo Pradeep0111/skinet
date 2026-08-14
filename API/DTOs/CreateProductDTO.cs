@@ -31,7 +31,7 @@ namespace API.DTOs
         [MaxLength(200)]
         public string? Origin { get; set; }
         public string? StorageInstructions { get; set; }
-        public string? ShelfLifeGuidance { get; set; }
+        public int? ShelfLifeDays { get; set; }
         [Range(0, 5)]
         public decimal? AverageRating { get; set; }
         [Range(0, int.MaxValue)]
@@ -62,8 +62,8 @@ namespace API.DTOs
         public decimal SalePrice { get; set; }
         [MaxLength(100)]
         public string? Label { get; set; }
-        public DateTime? StartDate { get; set; }
-        public DateTime? EndDate { get; set; }
+        public DateTime? StartsAt { get; set; }
+        public DateTime? EndsAt { get; set; }
         public bool IsActive { get; set; }
     }
 }

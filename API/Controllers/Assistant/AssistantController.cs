@@ -42,12 +42,27 @@ public class AssistantController(
         if (!configuration.GetValue<bool>("Assistant:Enabled"))
             return Ok(contextService.CreateUnavailableResponse(conversationId));
 
+        var cartItems = await contextService.BuildCartContextAsync(request.CartId);
+        var preferences = await contextService.BuildPurchaseHistoryAsync(User);
+
         var assistantRequest = new AssistantChatRequest
         {
             Message = request.Message,
             ConversationId = conversationId,
-            CartItems = await contextService.BuildCartContextAsync(request.CartId),
-            PurchaseHistory = await contextService.BuildPurchaseHistoryAsync(User)
+            Cart = new AssistantCartContext
+            {
+                Items = cartItems
+            },
+            Shopper = new AssistantShopperContext
+            {
+                IsAuthenticated = User.Identity?.IsAuthenticated == true,
+                Preferences = preferences.Select(x => new ProductPreferenceContext
+                {
+                    ProductId = x.ProductId,
+                    PurchaseCount = x.PurchaseCount,
+                    LastPurchasedAt = x.LastPurchasedAt
+                }).ToList()
+            }
         };
 
         var response = await assistantClient.SendChatAsync(assistantRequest, HttpContext.RequestAborted);

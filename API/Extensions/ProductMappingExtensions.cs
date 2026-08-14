@@ -13,9 +13,8 @@ public static class ProductMappingExtensions
             {
                 SalePrice = product.Promotion.SalePrice,
                 Label = product.Promotion.Label,
-                StartDate = product.Promotion.StartDate,
-                EndDate = product.Promotion.EndDate,
-                IsActive = true
+                StartsAt = product.Promotion.StartsAt,
+                EndsAt = product.Promotion.EndsAt
             }
             : null;
 
