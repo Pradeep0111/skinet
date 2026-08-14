@@ -64,7 +64,7 @@ public class AssistantClient(HttpClient httpClient, IConfiguration configuration
     {
         var serviceKey = configuration["Assistant:ServiceKey"];
         if (!string.IsNullOrEmpty(serviceKey))
-            request.Headers.Add("X-Service-Key", serviceKey);
+            request.Headers.Add("X-Assistant-Service-Key", serviceKey);
     }
 
     private static bool IsValidResponse(ChatResponseDto response)

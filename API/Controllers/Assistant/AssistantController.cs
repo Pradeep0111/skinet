@@ -57,7 +57,7 @@ public class AssistantController(
     [HttpGet("catalog")]
     public async Task<ActionResult<Pagination<AssistantProductDto>>> GetCatalog(
         [FromQuery] ProductSpecParams specParams,
-        [FromHeader(Name = "X-Service-Key")] string? serviceKey)
+        [FromHeader(Name = "X-Assistant-Service-Key")] string? serviceKey)
     {
         if (!contextService.ValidateServiceKey(serviceKey)) return Unauthorized();
 

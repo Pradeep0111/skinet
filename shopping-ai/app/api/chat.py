@@ -7,7 +7,7 @@ from app.models import ChatResponse, ErrorResponse, InternalChatRequest
 from app.security import require_internal_service_key
 from app.services.llm import LLMMessage, LLMProviderError
 
-router = APIRouter(prefix="/internal", tags=["internal"])
+router = APIRouter(prefix="/api", tags=["internal"])
 
 SYSTEM_PROMPT = """You are Skinet's shopping assistant.
 Use only Skinet catalog information supplied by approved tools.

@@ -40,7 +40,7 @@ def test_internal_chat_requires_service_key() -> None:
     application = create_app(_settings())
 
     with TestClient(application) as client:
-        response = client.post("/internal/chat", json={"message": "Show me fruit"})
+        response = client.post("/api/chat", json={"message": "Show me fruit"})
 
     assert response.status_code == 401
     assert response.json()["errorCode"] == "invalid_service_key"
@@ -60,9 +60,9 @@ def test_internal_chat_stores_bounded_multi_turn_history() -> None:
     headers = {"X-Assistant-Service-Key": "test-secret"}
 
     with TestClient(application) as client:
-        first = client.post("/internal/chat", json=payload, headers=headers)
+        first = client.post("/api/chat", json=payload, headers=headers)
         payload["message"] = "What else?"
-        second = client.post("/internal/chat", json=payload, headers=headers)
+        second = client.post("/api/chat", json=payload, headers=headers)
 
     assert first.status_code == 200
     assert second.status_code == 200
@@ -81,7 +81,7 @@ def test_internal_chat_rejects_pii_and_unknown_fields() -> None:
 
     with TestClient(application) as client:
         response = client.post(
-            "/internal/chat",
+            "/api/chat",
             json=payload,
             headers={"X-Assistant-Service-Key": "test-secret"},
         )
@@ -96,7 +96,7 @@ def test_internal_chat_honors_configured_message_limit() -> None:
 
     with TestClient(application) as client:
         response = client.post(
-            "/internal/chat",
+            "/api/chat",
             json={"message": "too long"},
             headers={"X-Assistant-Service-Key": "test-secret"},
         )
