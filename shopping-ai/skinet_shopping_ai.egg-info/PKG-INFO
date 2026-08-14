@@ -6,11 +6,12 @@ Requires-Python: >=3.12
 Description-Content-Type: text/markdown
 Requires-Dist: anthropic
 Requires-Dist: fastapi<1.0,>=0.115
+Requires-Dist: httpx2
+Requires-Dist: langgraph>=1.2.10
 Requires-Dist: pydantic-settings<3.0,>=2.6
 Requires-Dist: redis
 Requires-Dist: uvicorn[standard]<1.0,>=0.32
 Provides-Extra: dev
-Requires-Dist: httpx2; extra == "dev"
 Requires-Dist: pytest<9.0,>=8.3; extra == "dev"
 Requires-Dist: pytest-asyncio<1.0,>=0.24; extra == "dev"
 Requires-Dist: ruff<1.0,>=0.8; extra == "dev"
@@ -29,13 +30,9 @@ write shopping carts.
 - camelCase product/chat contracts backed by JSON fixtures
 - deterministic mock LLM provider for independent development
 - pytest and Ruff configuration
-- configurable async Claude provider using the official Anthropic SDK
-- memory and Redis conversation stores with bounded history and a 24-hour default TTL
-- protected `POST /internal/chat` endpoint with safe errors and strict request validation
-- rejection of unknown fields so PII cannot silently enter the AI service contract
 
-.NET catalog calls and LangGraph tools are intentionally scheduled for later weeks. The current
-chat endpoint returns conversational text only; it does not return products or cart actions yet.
+Claude, Redis persistence, .NET catalog calls, and LangGraph tools are intentionally scheduled
+for later weeks.
 
 ## Local setup with uv
 
@@ -75,7 +72,9 @@ Expected health response:
 ```
 
 The .NET development API is configured as `https://localhost:5000`, matching the existing
-Skinet launch profile. A separate service credential will protect catalog synchronization.
+Skinet launch profile. `DOTNET_SERVICE_KEY` is sent only in the
+`X-Assistant-Service-Key` header. Keep `DOTNET_VERIFY_TLS=true`; set it to `false` only for a local
+self-signed development certificate. Staging and production require the service key.
 
 `--reload-dir app` prevents Uvicorn from watching `.venv`, test caches, and other project files.
 Without it, installing dependencies while the server is running can trigger repeated reloads.

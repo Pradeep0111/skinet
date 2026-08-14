@@ -67,6 +67,20 @@ class AssistantProduct(ContractModel):
     substitution_group: str | None = None
 
 
+class CatalogPage(ContractModel):
+    page_index: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=50)
+    count: int = Field(ge=0)
+    data: list[AssistantProduct] = Field(default_factory=list)
+
+
+class StockCheck(ContractModel):
+    product_id: int = Field(gt=0)
+    requested_quantity: int = Field(gt=0, le=99)
+    quantity_in_stock: int = Field(ge=0)
+    available: bool
+
+
 class ChatRequest(ContractModel):
     message: str = Field(min_length=1, max_length=1_000)
     conversation_id: str | None = None

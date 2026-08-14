@@ -2,6 +2,7 @@ from app.models.contracts import (
     AssistantProduct,
     CartContext,
     CartContextItem,
+    CatalogPage,
     ChatRequest,
     ChatResponse,
     ErrorResponse,
@@ -12,10 +13,12 @@ from app.models.contracts import (
     Promotion,
     ProposedAction,
     ShopperContext,
+    StockCheck,
 )
 
 __all__ = [
     "AssistantProduct",
+    "CatalogPage",
     "CartContext",
     "CartContextItem",
     "ChatRequest",
@@ -28,4 +31,5 @@ __all__ = [
     "Promotion",
     "ProposedAction",
     "ShopperContext",
+    "StockCheck",
 ]

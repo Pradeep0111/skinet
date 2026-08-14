@@ -26,6 +26,7 @@ class Settings(BaseSettings):
 
     dotnet_base_url: AnyHttpUrl = AnyHttpUrl("https://localhost:5000")
     dotnet_service_key: SecretStr | None = None
+    dotnet_verify_tls: bool = True
     internal_service_key: SecretStr | None = None
     conversation_backend: Literal["memory", "redis"] = "memory"
     redis_url: str = "redis://localhost:6379/0"
@@ -44,6 +45,8 @@ class Settings(BaseSettings):
         if self.app_env in {"staging", "production"}:
             if self.internal_service_key is None:
                 raise ValueError("INTERNAL_SERVICE_KEY is required outside development and test")
+            if self.dotnet_service_key is None:
+                raise ValueError("DOTNET_SERVICE_KEY is required outside development and test")
             if self.conversation_backend != "redis":
                 raise ValueError(
                     "Redis conversation storage is required outside development and test"
