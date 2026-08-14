@@ -1,22 +1,50 @@
 import json
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
-from dataclasses import asdict
+from dataclasses import dataclass
 from time import monotonic
+from typing import Literal
 
 from redis.asyncio import Redis
 
 from app.config import Settings
-from app.services.llm import LLMMessage
+
+
+@dataclass(frozen=True, slots=True)
+class ConversationMessage:
+    """Stored transcript entry with application-produced product references."""
+
+    role: Literal["user", "assistant"]
+    content: str
+    product_ids: tuple[int, ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.role not in {"user", "assistant"}:
+            raise ValueError("Unsupported conversation role")
+        if not isinstance(self.content, str):
+            raise ValueError("Conversation content must be text")
+        if len(self.product_ids) > 10:
+            raise ValueError("Conversation product context cannot exceed 10 products")
+        if any(
+            type(product_id) is not int or product_id <= 0
+            for product_id in self.product_ids
+        ):
+            raise ValueError("Conversation product IDs must be positive integers")
+        if len(set(self.product_ids)) != len(self.product_ids):
+            raise ValueError("Conversation product IDs must be unique")
 
 
 class ConversationStore(ABC):
     @abstractmethod
-    async def get(self, conversation_id: str) -> list[LLMMessage]:
+    async def get(self, conversation_id: str) -> list[ConversationMessage]:
         """Return stored messages, or an empty list for a new/expired conversation."""
 
     @abstractmethod
-    async def save(self, conversation_id: str, messages: Sequence[LLMMessage]) -> None:
+    async def save(
+        self,
+        conversation_id: str,
+        messages: Sequence[ConversationMessage],
+    ) -> None:
         """Replace conversation history and refresh its TTL."""
 
     @abstractmethod
@@ -33,9 +61,9 @@ class InMemoryConversationStore(ConversationStore):
     ) -> None:
         self._ttl_seconds = ttl_seconds
         self._clock = clock
-        self._items: dict[str, tuple[float, list[LLMMessage]]] = {}
+        self._items: dict[str, tuple[float, list[ConversationMessage]]] = {}
 
-    async def get(self, conversation_id: str) -> list[LLMMessage]:
+    async def get(self, conversation_id: str) -> list[ConversationMessage]:
         stored = self._items.get(conversation_id)
         if stored is None:
             return []
@@ -45,7 +73,11 @@ class InMemoryConversationStore(ConversationStore):
             return []
         return list(messages)
 
-    async def save(self, conversation_id: str, messages: Sequence[LLMMessage]) -> None:
+    async def save(
+        self,
+        conversation_id: str,
+        messages: Sequence[ConversationMessage],
+    ) -> None:
         expires_at = self._clock() + self._ttl_seconds
         self._items[conversation_id] = (expires_at, list(messages))
 
@@ -60,15 +92,37 @@ class RedisConversationStore(ConversationStore):
         self._redis = redis
         self._ttl_seconds = ttl_seconds
 
-    async def get(self, conversation_id: str) -> list[LLMMessage]:
+    async def get(self, conversation_id: str) -> list[ConversationMessage]:
         payload = await self._redis.get(self._key(conversation_id))
         if payload is None:
             return []
         values = json.loads(payload)
-        return [LLMMessage(role=value["role"], content=value["content"]) for value in values]
+        if not isinstance(values, list):
+            raise ValueError("Invalid conversation payload")
+        return [
+            ConversationMessage(
+                role=value["role"],
+                content=value["content"],
+                product_ids=tuple(value.get("product_ids", ())),
+            )
+            for value in values
+        ]
 
-    async def save(self, conversation_id: str, messages: Sequence[LLMMessage]) -> None:
-        payload = json.dumps([asdict(message) for message in messages], separators=(",", ":"))
+    async def save(
+        self,
+        conversation_id: str,
+        messages: Sequence[ConversationMessage],
+    ) -> None:
+        values = []
+        for message in messages:
+            value: dict[str, object] = {
+                "role": message.role,
+                "content": message.content,
+            }
+            if message.product_ids:
+                value["product_ids"] = list(message.product_ids)
+            values.append(value)
+        payload = json.dumps(values, separators=(",", ":"))
         await self._redis.set(
             self._key(conversation_id),
             payload,

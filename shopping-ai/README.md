@@ -13,21 +13,31 @@ write shopping carts.
 - deterministic mock LLM provider for independent development
 - pytest and Ruff configuration
 - configurable async Claude provider using the official Anthropic SDK
-- memory and Redis conversation stores with bounded history and a 24-hour default TTL
-- protected `POST /internal/chat` endpoint with safe errors and strict request validation
+- memory and Redis conversation stores with bounded history, typed product references, and a
+  24-hour default TTL
+- protected `POST /api/chat` endpoint with safe errors and strict request validation
 - rejection of unknown fields so PII cannot silently enter the AI service contract
-- async, service-authenticated .NET catalog client with strict paginated response validation
+- async, service-authenticated .NET catalog client using the current Pydantic-maintained HTTPX2
+  package, with strict paginated response validation
 - read-only keyword search, product-details, and current-stock tools for Week 4 orchestration
 - mocked HTTP coverage for catalog filters, pagination, upstream failures, and contract failures
 - deterministic LangGraph routing for search, details, stock, comparison, and substitutions
+- deterministic follow-ups such as `Compare those` and `Add the first one to cart`, resolved only
+  from ordered product IDs produced by the most recent validated response
 - confirmation-only `add_to_cart` proposals that re-check current stock but never mutate a cart
 - an explicit tool allowlist with no cart-write, order, payment, or admin operation
 
-The Week 3 catalog boundary is implemented and tested against fixtures and mocked HTTP responses.
-Real catalog calls remain blocked until the .NET developer publishes `/api/assistant/catalog` and
-Gate 1 passes. The Week 4 graph is compiled and registered in application state, but the current
-chat endpoint still uses the Week 2 conversational path. Connecting graph output to
-`/internal/chat` is Week 5 work and requires the frozen gateway contract.
+The .NET catalog endpoint and Python catalog client are implemented, with live Gate 1 contract
+verification still pending. Week 5 connects the registered LangGraph workflow to `/api/chat`, so
+searches, comparisons, substitutions, stock checks, and confirmation-only proposed actions now
+flow through the protected endpoint. Full ASP.NET-to-FastAPI response and failure-path verification
+remains a joint Gate 2 task.
+
+Contextual routing never parses prior user or assistant prose and never sends the stored transcript
+to an LLM. Explicit product IDs in the current request take precedence, ambiguous references are
+clarified, and contextual product IDs are always re-fetched from the live catalog. The ASP.NET
+gateway must issue an opaque, unpredictable conversation ID per browser/user session before this
+is production-ready; clients must not choose or share conversation IDs.
 
 ## Local setup with uv
 
@@ -46,7 +56,7 @@ Activation is optional because `uv run` automatically uses `.venv`. To activate 
 run `.\.venv\Scripts\Activate.ps1`. Keep `LLM_PROVIDER=mock` for deterministic local development
 unless you intentionally want to call Claude. Never commit `.env` or API keys.
 
-Set a local-only `INTERNAL_SERVICE_KEY` before calling `/internal/chat`. The default
+Set a local-only `INTERNAL_SERVICE_KEY` before calling `/api/chat`. The default
 `CONVERSATION_BACKEND=memory` requires no infrastructure. To exercise Redis storage, change it to
 `redis` and ensure the Skinet Redis service is running. To use Claude instead of the deterministic
 mock, set `LLM_PROVIDER=anthropic`, `ANTHROPIC_API_KEY`, and `ANTHROPIC_MODEL`.
@@ -78,10 +88,10 @@ Test the protected mock chat endpoint from PowerShell:
 
 ```powershell
 $headers = @{ "X-Assistant-Service-Key" = "your-local-secret" }
-$body = @{ message = "Help me find fruit" } | ConvertTo-Json
+$body = @{ message = "Show me boots" } | ConvertTo-Json
 Invoke-RestMethod `
   -Method Post `
-  -Uri http://localhost:8000/internal/chat `
+  -Uri http://localhost:8000/api/chat `
   -Headers $headers `
   -ContentType "application/json" `
   -Body $body
