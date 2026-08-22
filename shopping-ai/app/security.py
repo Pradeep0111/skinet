@@ -23,7 +23,10 @@ async def require_internal_service_key(
 
     configured_value = configured_secret.get_secret_value()
     supplied_value = x_assistant_service_key or ""
-    if not configured_value or not compare_digest(supplied_value, configured_value):
+    if not configured_value or not compare_digest(
+        supplied_value.encode("utf-8"),
+        configured_value.encode("utf-8"),
+    ):
         raise AssistantAPIError(
             status_code=status.HTTP_401_UNAUTHORIZED,
             error_code="invalid_service_key",

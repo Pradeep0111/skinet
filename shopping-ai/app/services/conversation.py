@@ -9,6 +9,13 @@ from redis.asyncio import Redis
 
 from app.config import Settings
 
+MAX_STORED_MESSAGES = 100
+MAX_STORED_CONTENT_LENGTH = 10_000
+
+
+class ConversationCorruptError(ValueError):
+    """Stored conversation data is malformed and must not be trusted."""
+
 
 @dataclass(frozen=True, slots=True)
 class ConversationMessage:
@@ -23,6 +30,8 @@ class ConversationMessage:
             raise ValueError("Unsupported conversation role")
         if not isinstance(self.content, str):
             raise ValueError("Conversation content must be text")
+        if len(self.content) > MAX_STORED_CONTENT_LENGTH:
+            raise ValueError("Conversation content is too long")
         if len(self.product_ids) > 10:
             raise ValueError("Conversation product context cannot exceed 10 products")
         if any(
@@ -78,6 +87,8 @@ class InMemoryConversationStore(ConversationStore):
         conversation_id: str,
         messages: Sequence[ConversationMessage],
     ) -> None:
+        if len(messages) > MAX_STORED_MESSAGES:
+            raise ValueError("Conversation history exceeds the storage limit")
         expires_at = self._clock() + self._ttl_seconds
         self._items[conversation_id] = (expires_at, list(messages))
 
@@ -96,23 +107,35 @@ class RedisConversationStore(ConversationStore):
         payload = await self._redis.get(self._key(conversation_id))
         if payload is None:
             return []
-        values = json.loads(payload)
-        if not isinstance(values, list):
-            raise ValueError("Invalid conversation payload")
-        return [
-            ConversationMessage(
-                role=value["role"],
-                content=value["content"],
-                product_ids=tuple(value.get("product_ids", ())),
-            )
-            for value in values
-        ]
+        try:
+            values = json.loads(payload)
+            if not isinstance(values, list) or len(values) > MAX_STORED_MESSAGES:
+                raise ValueError("Invalid conversation payload")
+            messages = []
+            for value in values:
+                if not isinstance(value, dict):
+                    raise ValueError("Invalid conversation entry")
+                product_ids = value.get("product_ids", [])
+                if not isinstance(product_ids, list):
+                    raise ValueError("Invalid conversation product context")
+                messages.append(
+                    ConversationMessage(
+                        role=value["role"],
+                        content=value["content"],
+                        product_ids=tuple(product_ids),
+                    )
+                )
+            return messages
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+            raise ConversationCorruptError("Stored conversation data is invalid") from exc
 
     async def save(
         self,
         conversation_id: str,
         messages: Sequence[ConversationMessage],
     ) -> None:
+        if len(messages) > MAX_STORED_MESSAGES:
+            raise ValueError("Conversation history exceeds the storage limit")
         values = []
         for message in messages:
             value: dict[str, object] = {

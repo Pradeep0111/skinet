@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import time
 from datetime import UTC, datetime
 from logging.config import dictConfig
@@ -8,6 +9,8 @@ from uuid import uuid4
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
+
+REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 
 class JsonFormatter(logging.Formatter):
@@ -20,12 +23,19 @@ class JsonFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
         }
-        for field in ("request_id", "method", "path", "status_code", "duration_ms"):
+        for field in (
+            "request_id",
+            "method",
+            "path",
+            "status_code",
+            "duration_ms",
+            "exception_type",
+        ):
             value = getattr(record, field, None)
             if value is not None:
                 payload[field] = value
-        if record.exc_info:
-            payload["exception"] = self.formatException(record.exc_info)
+        if record.exc_info and "exception_type" not in payload:
+            payload["exception_type"] = record.exc_info[0].__name__
         return json.dumps(payload, separators=(",", ":"), default=str)
 
 
@@ -44,25 +54,35 @@ def configure_logging(level: str) -> None:
                 }
             },
             "root": {"handlers": ["console"], "level": normalized_level},
+            "loggers": {
+                name: {"level": "WARNING", "propagate": True}
+                for name in ("httpx", "httpcore", "httpx2", "httpcore2")
+            },
         }
     )
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        request_id = request.headers.get("x-request-id") or str(uuid4())
+        supplied_request_id = request.headers.get("x-request-id", "")
+        request_id = (
+            supplied_request_id
+            if REQUEST_ID_PATTERN.fullmatch(supplied_request_id)
+            else str(uuid4())
+        )
         request.state.request_id = request_id
         started = time.perf_counter()
 
         try:
             response = await call_next(request)
-        except Exception:
-            logging.getLogger("shopping_ai.http").exception(
+        except Exception as exc:
+            logging.getLogger("shopping_ai.http").error(
                 "request_failed",
                 extra={
                     "request_id": request_id,
                     "method": request.method,
                     "path": request.url.path,
+                    "exception_type": type(exc).__name__,
                 },
             )
             raise

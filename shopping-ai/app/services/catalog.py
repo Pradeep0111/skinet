@@ -20,6 +20,10 @@ class CatalogUnavailableError(CatalogClientError):
     """The catalog could not be reached or returned an unsuccessful response."""
 
 
+class CatalogAccessError(CatalogClientError):
+    """The catalog rejected a non-transient request or credential."""
+
+
 class CatalogContractError(CatalogClientError):
     """The catalog response did not match the shared contract."""
 
@@ -83,15 +87,26 @@ class CatalogClient:
         try:
             response = await self._client.get(CATALOG_PATH, params=params)
             response.raise_for_status()
+        except httpx2.HTTPStatusError as exc:
+            if exc.response.status_code not in {408, 429} and exc.response.status_code < 500:
+                raise CatalogAccessError(
+                    "The .NET catalog rejected the assistant request."
+                ) from exc
+            raise CatalogUnavailableError("The .NET catalog is unavailable.") from exc
         except httpx2.HTTPError as exc:
             raise CatalogUnavailableError("The .NET catalog is unavailable.") from exc
 
         try:
-            return CatalogPage.model_validate(response.json())
+            page = CatalogPage.model_validate(response.json())
         except (ValidationError, ValueError) as exc:
             raise CatalogContractError(
                 "The .NET catalog response does not match the shared contract."
             ) from exc
+        return self._validate_page(
+            page,
+            requested_page_index=page_index,
+            requested_page_size=page_size,
+        )
 
     async def get_product(self, product_id: int) -> AssistantProduct:
         if product_id < 1:
@@ -114,14 +129,45 @@ class CatalogClient:
             raise ValueError("max_items must be between 1 and 1000")
 
         products: list[AssistantProduct] = []
+        seen_product_ids: set[int] = set()
         page_index = 1
         while len(products) < max_items:
             page = await self.search_products(page_index=page_index, page_size=50)
-            products.extend(page.data[: max_items - len(products)])
+            page_products = page.data[: max_items - len(products)]
+            if any(product.id in seen_product_ids for product in page_products):
+                raise CatalogContractError(
+                    "The .NET catalog returned duplicate products across pages."
+                )
+            seen_product_ids.update(product.id for product in page_products)
+            products.extend(page_products)
             if page.page_index * page.page_size >= page.count or not page.data:
                 break
             page_index += 1
         return products
+
+    @staticmethod
+    def _validate_page(
+        page: CatalogPage,
+        *,
+        requested_page_index: int,
+        requested_page_size: int,
+    ) -> CatalogPage:
+        offset = (page.page_index - 1) * page.page_size
+        product_ids = [product.id for product in page.data]
+        has_unreturned_products = offset + len(page.data) < page.count
+        if (
+            page.page_index != requested_page_index
+            or page.page_size != requested_page_size
+            or len(page.data) > page.page_size
+            or (bool(page.data) and offset + len(page.data) > page.count)
+            or (not page.data and offset < page.count)
+            or (has_unreturned_products and len(page.data) != page.page_size)
+            or len(product_ids) != len(set(product_ids))
+        ):
+            raise CatalogContractError(
+                "The .NET catalog returned inconsistent pagination metadata."
+            )
+        return page
 
     @staticmethod
     def _add_filters(params: dict[str, Any], filters: CatalogFilters) -> None:

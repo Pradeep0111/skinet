@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     conversation_ttl_seconds: int = Field(default=86_400, ge=300, le=604_800)
     conversation_max_messages: int = Field(default=20, ge=2, le=100)
     request_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
+    chat_timeout_seconds: float = Field(default=20.0, gt=0, le=25)
     max_message_length: int = Field(default=1_000, ge=1, le=10_000)
 
     @model_validator(mode="after")
@@ -43,13 +44,22 @@ class Settings(BaseSettings):
             if not self.anthropic_model:
                 raise ValueError("ANTHROPIC_MODEL is required for the anthropic provider")
         if self.app_env in {"staging", "production"}:
-            if self.internal_service_key is None:
-                raise ValueError("INTERNAL_SERVICE_KEY is required outside development and test")
-            if self.dotnet_service_key is None:
-                raise ValueError("DOTNET_SERVICE_KEY is required outside development and test")
+            for name, secret in (
+                ("INTERNAL_SERVICE_KEY", self.internal_service_key),
+                ("DOTNET_SERVICE_KEY", self.dotnet_service_key),
+            ):
+                if secret is None or len(secret.get_secret_value().strip()) < 16:
+                    raise ValueError(
+                        f"{name} must contain at least 16 non-whitespace characters "
+                        "outside development and test"
+                    )
             if self.conversation_backend != "redis":
                 raise ValueError(
                     "Redis conversation storage is required outside development and test"
+                )
+            if self.dotnet_base_url.scheme != "https" or not self.dotnet_verify_tls:
+                raise ValueError(
+                    "The .NET catalog must use verified HTTPS outside development and test"
                 )
         return self
 

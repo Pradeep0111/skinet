@@ -1,6 +1,6 @@
 import asyncio
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Literal, TypedDict
 
 from langgraph.graph import END, START, StateGraph
@@ -60,6 +60,7 @@ class ShoppingAgentState(TypedDict, total=False):
     message: str
     conversation_id: str
     context_product_ids: list[int]
+    cart_quantities: dict[int, int]
     intent: AgentIntent
     query: str
     product_ids: list[int]
@@ -118,6 +119,7 @@ class ShoppingAgent:
         message: str,
         conversation_id: str,
         context_product_ids: Sequence[int] = (),
+        cart_quantities: Mapping[int, int] | None = None,
     ) -> ChatResponse:
         normalized_message = message.strip()
         if not normalized_message:
@@ -125,12 +127,14 @@ class ShoppingAgent:
         if not conversation_id.strip():
             raise ValueError("conversation_id cannot be empty")
         normalized_context = self._normalize_context_product_ids(context_product_ids)
+        normalized_cart = self._normalize_cart_quantities(cart_quantities or {})
 
         result = await self.graph.ainvoke(
             {
                 "message": normalized_message,
                 "conversation_id": conversation_id,
                 "context_product_ids": normalized_context,
+                "cart_quantities": normalized_cart,
                 "products": [],
                 "comparisons": [],
                 "proposed_actions": [],
@@ -304,6 +308,10 @@ class ShoppingAgent:
             product, action = await self._tools.propose_add_to_cart(
                 state["product_ids"][0],
                 quantity=state["quantity"],
+                existing_quantity=state.get("cart_quantities", {}).get(
+                    state["product_ids"][0],
+                    0,
+                ),
             )
         except InsufficientStockError as exc:
             return {
@@ -382,6 +390,19 @@ class ShoppingAgent:
                 raise ValueError("context_product_ids must contain positive integers")
             if product_id not in normalized:
                 normalized.append(product_id)
+        return normalized
+
+    @staticmethod
+    def _normalize_cart_quantities(cart_quantities: Mapping[int, int]) -> dict[int, int]:
+        if len(cart_quantities) > 100:
+            raise ValueError("cart_quantities cannot exceed 100 products")
+        normalized: dict[int, int] = {}
+        for product_id, quantity in cart_quantities.items():
+            if type(product_id) is not int or product_id <= 0:
+                raise ValueError("cart product IDs must be positive integers")
+            if type(quantity) is not int or quantity < 0:
+                raise ValueError("cart quantities must be non-negative integers")
+            normalized[product_id] = quantity
         return normalized
 
     @staticmethod

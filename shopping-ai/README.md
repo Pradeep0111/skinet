@@ -25,6 +25,10 @@ write shopping carts.
 - deterministic follow-ups such as `Compare those` and `Add the first one to cart`, resolved only
   from ordered product IDs produced by the most recent validated response
 - confirmation-only `add_to_cart` proposals that re-check current stock but never mutate a cart
+- cart-aware stock validation that includes quantities already supplied by the trusted ASP.NET
+  gateway
+- bounded end-to-end chat processing, strict pagination checks, safe Redis-corruption recovery,
+  and non-retryable catalog credential/contract errors
 - an explicit tool allowlist with no cart-write, order, payment, or admin operation
 
 The .NET catalog endpoint and Python catalog client are implemented, with live Gate 1 contract
@@ -32,6 +36,10 @@ verification still pending. Week 5 connects the registered LangGraph workflow to
 searches, comparisons, substitutions, stock checks, and confirmation-only proposed actions now
 flow through the protected endpoint. Full ASP.NET-to-FastAPI response and failure-path verification
 remains a joint Gate 2 task.
+
+The independently testable Python portion of Week 6 covers the protected route, catalog boundary,
+conversation storage, service credentials, request IDs, production settings, and failure responses.
+Gate 2 is not complete until the same cases pass through the live ASP.NET gateway and real catalog.
 
 Contextual routing never parses prior user or assistant prose and never sends the stored transcript
 to an LLM. Explicit product IDs in the current request take precedence, ambiguous references are
@@ -79,7 +87,11 @@ Expected health response:
 The .NET development API is configured as `https://localhost:5000`, matching the existing
 Skinet launch profile. `DOTNET_SERVICE_KEY` is sent only in the
 `X-Assistant-Service-Key` header. Keep `DOTNET_VERIFY_TLS=true`; set it to `false` only for a local
-self-signed development certificate. Staging and production require the service key.
+self-signed development certificate. The current ASP.NET implementation uses one
+`Assistant:ServiceKey` in both directions, so local integration requires `INTERNAL_SERVICE_KEY`
+and `DOTNET_SERVICE_KEY` to contain that same value. Staging and production require service keys
+of at least 16 non-whitespace characters, Redis conversation storage, and verified HTTPS.
+`CHAT_TIMEOUT_SECONDS` defaults to 20 seconds, below the current 30-second ASP.NET gateway timeout.
 
 `--reload-dir app` prevents Uvicorn from watching `.venv`, test caches, and other project files.
 Without it, installing dependencies while the server is running can trigger repeated reloads.
@@ -98,6 +110,20 @@ Invoke-RestMethod `
 ```
 
 The header value must match `INTERNAL_SERVICE_KEY` in the untracked `.env` file.
+
+## Joint Week 6 handoff
+
+The public request continues to go to ASP.NET at `POST /api/Assistant/chat` and contains only
+`message`, optional `conversationId`, and optional `cartId`. ASP.NET builds trusted `cart.items`
+and `shopper.preferences` context, then calls this service at `POST /api/chat`. Python reads the
+catalog from ASP.NET at `GET /api/assistant/catalog` using `pageIndex`, `pageSize`, `search`, and
+the existing filter query names.
+
+Before Gate 2 is approved, run search, details, stock, comparison, substitution, contextual
+follow-up, and cart-proposal cases through the live ASP.NET gateway. Also verify invalid service
+keys, a stopped FastAPI process, catalog timeouts, malformed downstream responses, and preserved
+conversation IDs. Python intentionally accepts the currently omitted `storageInstructions` and
+`shelfLifeDays` fields as `null`; their authoritative projection remains .NET-owned.
 
 ## Contract handoff
 

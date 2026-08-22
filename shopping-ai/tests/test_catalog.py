@@ -8,6 +8,7 @@ import pytest
 
 from app.models import AssistantProduct, CatalogPage
 from app.services.catalog import (
+    CatalogAccessError,
     CatalogClient,
     CatalogContractError,
     CatalogFilters,
@@ -30,6 +31,10 @@ def _page_payload(*, page_index: int = 1, count: int = 1) -> dict[str, object]:
         "count": count,
         "data": [_product_payload()],
     }
+
+
+def _product_payloads(product_ids: range) -> list[dict[str, object]]:
+    return [{**_product_payload(), "id": product_id} for product_id in product_ids]
 
 
 @pytest.mark.asyncio
@@ -81,7 +86,7 @@ async def test_catalog_client_paginates_for_exact_product_lookup() -> None:
         requested_pages.append(page_index)
         payload = _page_payload(page_index=page_index, count=51)
         if page_index == 1:
-            payload["data"] = [{**_product_payload(), "id": 2}]
+            payload["data"] = _product_payloads(range(2, 52))
         return httpx2.Response(200, json=payload, request=request)
 
     client = CatalogClient(
@@ -107,7 +112,10 @@ async def test_catalog_client_lists_products_across_bounded_pages() -> None:
         page_index = int(request.url.params["pageIndex"])
         requested_pages.append(page_index)
         payload = _page_payload(page_index=page_index, count=51)
-        payload["data"] = [{**_product_payload(), "id": page_index}]
+        if page_index == 1:
+            payload["data"] = _product_payloads(range(1, 51))
+        else:
+            payload["data"] = [{**_product_payload(), "id": 51}]
         return httpx2.Response(200, json=payload, request=request)
 
     client = CatalogClient(
@@ -117,11 +125,11 @@ async def test_catalog_client_lists_products_across_bounded_pages() -> None:
         transport=httpx2.MockTransport(handler),
     )
     try:
-        products = await client.list_products(max_items=10)
+        products = await client.list_products(max_items=51)
     finally:
         await client.close()
 
-    assert [product.id for product in products] == [1, 2]
+    assert [product.id for product in products] == list(range(1, 52))
     assert requested_pages == [1, 2]
 
 
@@ -168,6 +176,245 @@ async def test_catalog_client_normalizes_remote_and_contract_failures(
     try:
         with pytest.raises(expected_error):
             await client.search_products()
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status_code", [400, 401, 403, 404])
+async def test_catalog_client_normalizes_unsuccessful_endpoint_statuses(
+    status_code: int,
+) -> None:
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(
+            status_code,
+            text="private upstream response",
+            request=request,
+        )
+
+    client = CatalogClient(
+        base_url="https://dotnet.test",
+        service_key="catalog-secret",
+        timeout_seconds=2,
+        transport=httpx2.MockTransport(handler),
+    )
+    try:
+        with pytest.raises(CatalogAccessError) as error:
+            await client.search_products()
+    finally:
+        await client.close()
+
+    assert "private upstream response" not in str(error.value)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status_code", [408, 429, 500, 502, 503, 504])
+async def test_catalog_client_normalizes_transient_endpoint_statuses(
+    status_code: int,
+) -> None:
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(
+            status_code,
+            text="private upstream response",
+            request=request,
+        )
+
+    client = CatalogClient(
+        base_url="https://dotnet.test",
+        service_key="catalog-secret",
+        timeout_seconds=2,
+        transport=httpx2.MockTransport(handler),
+    )
+    try:
+        with pytest.raises(CatalogUnavailableError) as error:
+            await client.search_products()
+    finally:
+        await client.close()
+
+    assert "private upstream response" not in str(error.value)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "transport_error",
+    [
+        httpx2.ConnectError("private host detail"),
+        httpx2.ConnectTimeout("private timeout detail"),
+        httpx2.ReadTimeout("private read detail"),
+    ],
+)
+async def test_catalog_client_normalizes_transport_failures(
+    transport_error: httpx2.HTTPError,
+) -> None:
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        transport_error.request = request
+        raise transport_error
+
+    client = CatalogClient(
+        base_url="https://dotnet.test",
+        service_key="catalog-secret",
+        timeout_seconds=2,
+        transport=httpx2.MockTransport(handler),
+    )
+    try:
+        with pytest.raises(CatalogUnavailableError) as error:
+            await client.search_products()
+    finally:
+        await client.close()
+
+    assert "private" not in str(error.value)
+
+
+@pytest.mark.asyncio
+async def test_catalog_client_rejects_non_json_success_response() -> None:
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(
+            200,
+            content=b"not-json",
+            headers={"content-type": "application/json"},
+            request=request,
+        )
+
+    client = CatalogClient(
+        base_url="https://dotnet.test",
+        service_key="catalog-secret",
+        timeout_seconds=2,
+        transport=httpx2.MockTransport(handler),
+    )
+    try:
+        with pytest.raises(CatalogContractError):
+            await client.search_products(page_size=50)
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {**_page_payload(), "pageIndex": 2},
+        {**_page_payload(), "pageSize": 49},
+        {**_page_payload(), "count": 0},
+        _page_payload(count=51),
+        {
+            **_page_payload(count=2),
+            "data": [_product_payload(), _product_payload()],
+        },
+    ],
+)
+async def test_catalog_client_rejects_inconsistent_pagination(
+    payload: dict[str, object],
+) -> None:
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(200, json=payload, request=request)
+
+    client = CatalogClient(
+        base_url="https://dotnet.test",
+        service_key="catalog-secret",
+        timeout_seconds=2,
+        transport=httpx2.MockTransport(handler),
+    )
+    try:
+        with pytest.raises(CatalogContractError):
+            await client.search_products(page_size=50)
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_catalog_client_rejects_early_empty_page() -> None:
+    payload = {**_page_payload(count=51), "data": []}
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(200, json=payload, request=request)
+
+    client = CatalogClient(
+        base_url="https://dotnet.test",
+        service_key="catalog-secret",
+        timeout_seconds=2,
+        transport=httpx2.MockTransport(handler),
+    )
+    try:
+        with pytest.raises(CatalogContractError):
+            await client.search_products(page_size=50)
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_catalog_client_accepts_empty_page_beyond_catalog_count() -> None:
+    payload = {
+        "pageIndex": 2,
+        "pageSize": 50,
+        "count": 1,
+        "data": [],
+    }
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(200, json=payload, request=request)
+
+    client = CatalogClient(
+        base_url="https://dotnet.test",
+        service_key="catalog-secret",
+        timeout_seconds=2,
+        transport=httpx2.MockTransport(handler),
+    )
+    try:
+        page = await client.search_products(page_index=2, page_size=50)
+    finally:
+        await client.close()
+
+    assert page.data == []
+
+
+@pytest.mark.asyncio
+async def test_catalog_client_accepts_current_dotnet_projection_without_new_optional_fields(
+) -> None:
+    product = _product_payload()
+    product.pop("storageInstructions")
+    product.pop("shelfLifeDays")
+    payload = {**_page_payload(), "data": [product]}
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(200, json=payload, request=request)
+
+    client = CatalogClient(
+        base_url="https://dotnet.test",
+        service_key="catalog-secret",
+        timeout_seconds=2,
+        transport=httpx2.MockTransport(handler),
+    )
+    try:
+        page = await client.search_products(page_size=50)
+    finally:
+        await client.close()
+
+    assert page.data[0].storage_instructions is None
+    assert page.data[0].shelf_life_days is None
+
+
+@pytest.mark.asyncio
+async def test_catalog_client_rejects_duplicate_products_across_pages() -> None:
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        page_index = int(request.url.params["pageIndex"])
+        payload = _page_payload(page_index=page_index, count=51)
+        if page_index == 1:
+            payload["data"] = _product_payloads(range(1, 51))
+        return httpx2.Response(
+            200,
+            json=payload,
+            request=request,
+        )
+
+    client = CatalogClient(
+        base_url="https://dotnet.test",
+        service_key="catalog-secret",
+        timeout_seconds=2,
+        transport=httpx2.MockTransport(handler),
+    )
+    try:
+        with pytest.raises(CatalogContractError):
+            await client.list_products()
     finally:
         await client.close()
 
