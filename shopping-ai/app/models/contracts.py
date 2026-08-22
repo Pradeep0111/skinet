@@ -1,8 +1,9 @@
+import re
 from datetime import datetime
 from decimal import Decimal
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, PlainSerializer
+from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, field_validator
 from pydantic.alias_generators import to_camel
 
 JsonDecimal = Annotated[
@@ -34,8 +35,8 @@ class NutritionFacts(ContractModel):
 class Promotion(ContractModel):
     sale_price: JsonDecimal = Field(ge=0)
     label: str
-    starts_at: str | None = None
-    ends_at: str | None = None
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
 
 
 class AssistantProduct(ContractModel):
@@ -89,7 +90,7 @@ class ChatRequest(ContractModel):
 
 class CartContextItem(ContractModel):
     product_id: int = Field(gt=0)
-    quantity: int = Field(gt=0, le=99)
+    quantity: int = Field(gt=0, le=2_147_483_647)
 
 
 class CartContext(ContractModel):
@@ -117,6 +118,20 @@ class InternalChatRequest(ContractModel):
     )
     cart: CartContext | None = None
     shopper: ShopperContext | None = None
+
+    @field_validator("conversation_id", mode="before")
+    @classmethod
+    def normalize_unsafe_conversation_id(cls, value: object) -> object:
+        if value is None or not isinstance(value, str):
+            return value
+        normalized = value.strip()
+        if (
+            not normalized
+            or len(normalized) > 128
+            or re.fullmatch(r"[A-Za-z0-9_-]+", normalized) is None
+        ):
+            return None
+        return normalized
 
 
 class ProductComparison(ContractModel):

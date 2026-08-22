@@ -141,13 +141,22 @@ class CatalogTools:
         product_id: int,
         *,
         quantity: int = 1,
+        existing_quantity: int = 0,
     ) -> tuple[AssistantProduct, ProposedAction]:
         if not 1 <= quantity <= 99:
             raise ValueError("quantity must be between 1 and 99")
+        if type(existing_quantity) is not int or existing_quantity < 0:
+            raise ValueError("existing_quantity must be a non-negative integer")
         product = await self._client.get_product(product_id)
-        if product.quantity_in_stock < quantity:
+        requested_total = existing_quantity + quantity
+        if product.quantity_in_stock < requested_total:
+            cart_context = (
+                f", and {existing_quantity} are already in your cart"
+                if existing_quantity
+                else ""
+            )
             raise InsufficientStockError(
-                f"Only {product.quantity_in_stock} units are currently available."
+                f"Only {product.quantity_in_stock} units are currently available{cart_context}."
             )
 
         action = ProposedAction(

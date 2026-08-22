@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, call
 
 import pytest
 
@@ -183,6 +183,161 @@ async def test_agent_requests_ids_before_running_specific_tools() -> None:
     assert "product ID" in response.message
     client.get_product.assert_not_awaited()
     client.search_products.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_agent_compares_products_from_typed_context() -> None:
+    agent, client = _agent()
+
+    response = await agent.run(
+        message="Compare those",
+        conversation_id="conversation-1",
+        context_product_ids=(1, 2),
+    )
+
+    assert [product.id for product in response.products] == [1, 2]
+    assert response.comparisons[0].product_ids == [1, 2]
+    client.get_product.assert_has_awaits([call(1), call(2)], any_order=True)
+
+
+@pytest.mark.asyncio
+async def test_agent_uses_context_ordinal_for_confirmation_only_action() -> None:
+    agent, client = _agent()
+
+    response = await agent.run(
+        message="Add 2 of the second one to cart",
+        conversation_id="conversation-1",
+        context_product_ids=(1, 2),
+    )
+
+    action = response.proposed_actions[0]
+    assert action.product_id == 2
+    assert action.quantity == 2
+    assert action.requires_confirmation is True
+    client.get_product.assert_awaited_once_with(2)
+
+
+@pytest.mark.asyncio
+async def test_agent_accepts_contextual_add_without_cart_phrase() -> None:
+    agent, _ = _agent()
+
+    response = await agent.run(
+        message="Add the first one",
+        conversation_id="conversation-1",
+        context_product_ids=(1, 2),
+    )
+
+    assert response.proposed_actions[0].product_id == 1
+    assert response.proposed_actions[0].requires_confirmation is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("message", "context_product_ids"),
+    [
+        ("Compare those", ()),
+        ("Add the third one to cart", (1, 2)),
+        ("Add it to cart", (1, 2)),
+    ],
+)
+async def test_agent_clarifies_missing_or_ambiguous_context(
+    message: str,
+    context_product_ids: tuple[int, ...],
+) -> None:
+    agent, client = _agent()
+
+    response = await agent.run(
+        message=message,
+        conversation_id="conversation-1",
+        context_product_ids=context_product_ids,
+    )
+
+    assert response.products == []
+    assert response.proposed_actions == []
+    assert "choose" in response.message.casefold()
+    client.get_product.assert_not_awaited()
+    client.search_products.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_agent_explicit_product_ids_override_typed_context() -> None:
+    agent, _ = _agent()
+
+    response = await agent.run(
+        message="Compare product 1 and product 2",
+        conversation_id="conversation-1",
+        context_product_ids=(2, 3),
+    )
+
+    assert response.comparisons[0].product_ids == [1, 2]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Show me one board",
+        "Show me boots that are waterproof",
+        "I need this year's boots",
+    ],
+)
+async def test_agent_does_not_misclassify_ordinary_search_as_context(message: str) -> None:
+    agent, client = _agent()
+
+    response = await agent.run(
+        message=message,
+        conversation_id="conversation-1",
+        context_product_ids=(1, 2),
+    )
+
+    assert [product.id for product in response.products] == [1, 2]
+    assert response.proposed_actions == []
+    client.search_products.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_agent_does_not_treat_additional_as_add_intent() -> None:
+    agent, client = _agent()
+
+    response = await agent.run(
+        message="Show additional details about the first one",
+        conversation_id="conversation-1",
+        context_product_ids=(1, 2),
+    )
+
+    assert [product.id for product in response.products] == [1]
+    assert response.proposed_actions == []
+    client.get_product.assert_awaited_once_with(1)
+
+
+@pytest.mark.asyncio
+async def test_agent_treats_comparison_number_as_count_not_product_id() -> None:
+    agent, _ = _agent()
+
+    response = await agent.run(
+        message="Compare those two",
+        conversation_id="conversation-1",
+        context_product_ids=(1, 2),
+    )
+
+    assert response.comparisons[0].product_ids == [1, 2]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("quantity", ["-1", "0", "1.5", "100"])
+async def test_agent_rejects_invalid_numeric_quantity_instead_of_defaulting(
+    quantity: str,
+) -> None:
+    agent, client = _agent()
+
+    response = await agent.run(
+        message=f"Add {quantity} of product 1 to cart",
+        conversation_id="conversation-1",
+    )
+
+    assert response.proposed_actions == []
+    assert response.message == "Quantity must be between 1 and 99."
+    client.get_product.assert_not_awaited()
 
 
 def test_tool_allowlist_contains_no_mutating_cart_operation() -> None:

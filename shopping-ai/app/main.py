@@ -44,8 +44,17 @@ def create_app(
     application = FastAPI(
         title=resolved_settings.app_name,
         version=__version__,
-        docs_url="/docs" if resolved_settings.app_env != "production" else None,
+        docs_url=(
+            "/docs"
+            if resolved_settings.app_env in {"development", "test"}
+            else None
+        ),
         redoc_url=None,
+        openapi_url=(
+            "/openapi.json"
+            if resolved_settings.app_env in {"development", "test"}
+            else None
+        ),
         lifespan=lifespan,
     )
     application.state.settings = resolved_settings

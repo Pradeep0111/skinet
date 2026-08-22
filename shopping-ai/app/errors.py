@@ -70,10 +70,12 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
 
 
 async def unexpected_error_handler(request: Request, exc: Exception) -> JSONResponse:
-    logger.exception(
+    logger.error(
         "unexpected_error",
-        exc_info=exc,
-        extra={"request_id": getattr(request.state, "request_id", "unavailable")},
+        extra={
+            "request_id": getattr(request.state, "request_id", "unavailable"),
+            "exception_type": type(exc).__name__,
+        },
     )
     return _response(
         request,
