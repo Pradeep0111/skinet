@@ -1,6 +1,7 @@
 import asyncio
 import re
 from collections.abc import Mapping, Sequence
+from decimal import Decimal
 from typing import Literal, TypedDict
 
 from langgraph.graph import END, START, StateGraph
@@ -54,6 +55,26 @@ _CONTEXT_ORDINAL_PATTERN = re.compile(
     r"sixth|6th|seventh|7th|eighth|8th|ninth|9th|tenth|10th|last)\b",
     re.I,
 )
+_BETWEEN_PRICE_PATTERN = re.compile(
+    r"\bbetween\s*(?:[$£€₹]\s*)?(?P<minimum>\d+(?:\.\d{1,2})?)\s*"
+    r"(?:and|-)\s*(?:[$£€₹]\s*)?(?P<maximum>\d+(?:\.\d{1,2})?)\b",
+    re.I,
+)
+_MAX_PRICE_PATTERN = re.compile(
+    r"\b(?:under|below|less\s+than|up\s+to|maximum|max)\s*"
+    r"(?:[$£€₹]\s*)?(?P<maximum>\d+(?:\.\d{1,2})?)\b",
+    re.I,
+)
+_MIN_PRICE_PATTERN = re.compile(
+    r"\b(?:over|above|more\s+than|at\s+least|minimum|min)\s*"
+    r"(?:[$£€₹]\s*)?(?P<minimum>\d+(?:\.\d{1,2})?)\b",
+    re.I,
+)
+_NEGATIVE_PRICE_PATTERN = re.compile(
+    r"\b(?:under|below|less\s+than|up\s+to|maximum|max|over|above|"
+    r"more\s+than|at\s+least|minimum|min)\s*(?:[$£€₹]\s*)?-\d",
+    re.I,
+)
 
 
 class ShoppingAgentState(TypedDict, total=False):
@@ -65,6 +86,8 @@ class ShoppingAgentState(TypedDict, total=False):
     query: str
     product_ids: list[int]
     quantity: int
+    min_price: Decimal
+    max_price: Decimal
     clarification: str
     response_message: str
     products: list[AssistantProduct]
@@ -161,7 +184,7 @@ class ShoppingAgent:
                 state.get("context_product_ids", []),
             )
         quantity = self._extract_quantity(message)
-        query = self._extract_search_query(message)
+        query, min_price, max_price, price_error = self._extract_search_request(message)
         clarification: str | None = None
 
         if not 1 <= quantity <= 99:
@@ -171,6 +194,14 @@ class ShoppingAgent:
                 "quantity": quantity,
                 "query": query,
                 "clarification": "Quantity must be between 1 and 99.",
+            }
+        if price_error:
+            return {
+                "intent": "clarify",
+                "product_ids": product_ids[:4],
+                "quantity": quantity,
+                "query": query,
+                "clarification": price_error,
             }
 
         if re.search(r"\b(?:compare|comparison)\b", message, re.I):
@@ -228,6 +259,10 @@ class ShoppingAgent:
         }
         if clarification:
             result["clarification"] = clarification
+        if min_price is not None:
+            result["min_price"] = min_price
+        if max_price is not None:
+            result["max_price"] = max_price
         return result
 
     @staticmethod
@@ -235,7 +270,12 @@ class ShoppingAgent:
         return state["intent"]
 
     async def _search(self, state: ShoppingAgentState) -> ShoppingAgentState:
-        products = await self._tools.search_products(state["query"], limit=10)
+        products = await self._tools.search_products(
+            state["query"],
+            limit=10,
+            min_price=state.get("min_price"),
+            max_price=state.get("max_price"),
+        )
         if products:
             message = f"I found {len(products)} matching product(s)."
         else:
@@ -461,4 +501,40 @@ class ShoppingAgent:
             flags=re.I,
         )
         query = re.sub(r"^me\s+", "", query, flags=re.I).strip(" .?!")
-        return query or message.strip()
+        query = re.sub(r"\b(?:and|for)\s*$", "", query, flags=re.I).strip(" .?!")
+        query = re.sub(r"\s+", " ", query)
+        return query
+
+    @classmethod
+    def _extract_search_request(
+        cls,
+        message: str,
+    ) -> tuple[str, Decimal | None, Decimal | None, str | None]:
+        if _NEGATIVE_PRICE_PATTERN.search(message):
+            query = cls._extract_search_query(message) or message.strip()
+            return query, None, None, "Prices cannot be negative."
+
+        working = message
+        minimum: Decimal | None = None
+        maximum: Decimal | None = None
+        between = _BETWEEN_PRICE_PATTERN.search(working)
+        if between:
+            minimum = Decimal(between.group("minimum"))
+            maximum = Decimal(between.group("maximum"))
+            working = _BETWEEN_PRICE_PATTERN.sub(" ", working, count=1)
+        else:
+            maximum_match = _MAX_PRICE_PATTERN.search(working)
+            if maximum_match:
+                maximum = Decimal(maximum_match.group("maximum"))
+                working = _MAX_PRICE_PATTERN.sub(" ", working, count=1)
+            minimum_match = _MIN_PRICE_PATTERN.search(working)
+            if minimum_match:
+                minimum = Decimal(minimum_match.group("minimum"))
+                working = _MIN_PRICE_PATTERN.sub(" ", working, count=1)
+
+        query = cls._extract_search_query(working)
+        if minimum is not None and maximum is not None and minimum > maximum:
+            return query, minimum, maximum, "Minimum price cannot exceed maximum price."
+        if (minimum is not None or maximum is not None) and not query.strip(" .?!"):
+            return query, minimum, maximum, "Please include a product description with the price."
+        return query or message.strip(), minimum, maximum, None

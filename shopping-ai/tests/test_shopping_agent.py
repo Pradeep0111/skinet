@@ -351,3 +351,61 @@ def test_tool_allowlist_contains_no_mutating_cart_operation() -> None:
     }
     assert "add_to_cart" not in TOOL_ALLOWLIST
     assert "update_cart" not in TOOL_ALLOWLIST
+
+
+@pytest.mark.asyncio
+async def test_agent_extracts_price_constraints_from_search() -> None:
+    agent, client = _agent()
+
+    response = await agent.run(
+        message="Show me bananas between $2 and $3",
+        conversation_id="conversation-1",
+    )
+
+    search = client.search_products.await_args
+    assert search.kwargs["query"] == "bananas"
+    assert search.kwargs["filters"].min_price is None
+    assert search.kwargs["filters"].max_price is None
+    assert [product.id for product in response.products] == [2]
+
+
+@pytest.mark.asyncio
+async def test_agent_rejects_reversed_price_range_without_catalog_call() -> None:
+    agent, client = _agent()
+
+    response = await agent.run(
+        message="Show me boots between $200 and $100",
+        conversation_id="conversation-1",
+    )
+
+    assert response.products == []
+    assert response.message == "Minimum price cannot exceed maximum price."
+    client.search_products.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_agent_rejects_price_only_search_without_catalog_call() -> None:
+    agent, client = _agent()
+
+    response = await agent.run(
+        message="Show me under $100",
+        conversation_id="conversation-1",
+    )
+
+    assert response.products == []
+    assert response.message == "Please include a product description with the price."
+    client.search_products.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_agent_cleans_combined_price_clauses() -> None:
+    agent, client = _agent()
+
+    response = await agent.run(
+        message="Show me bananas over $1 and under $2",
+        conversation_id="conversation-1",
+    )
+
+    search = client.search_products.await_args
+    assert search.kwargs["query"] == "bananas"
+    assert [product.id for product in response.products] == [1]

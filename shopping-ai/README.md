@@ -30,16 +30,17 @@ write shopping carts.
 - bounded end-to-end chat processing, strict pagination checks, safe Redis-corruption recovery,
   and non-retryable catalog credential/contract errors
 - an explicit tool allowlist with no cart-write, order, payment, or admin operation
+- opt-in Week 7 hybrid retrieval using a content-hashed catalog snapshot, local embeddings,
+  in-memory FAISS cosine search, deterministic reciprocal-rank fusion, and live price/stock filters
+- inclusive price constraints such as `boots under $200`, with keyword-only fallback whenever the
+  embedding model, FAISS, or complete-catalog snapshot is unavailable
 
-The .NET catalog endpoint and Python catalog client are implemented, with live Gate 1 contract
-verification still pending. Week 5 connects the registered LangGraph workflow to `/api/chat`, so
-searches, comparisons, substitutions, stock checks, and confirmation-only proposed actions now
-flow through the protected endpoint. Full ASP.NET-to-FastAPI response and failure-path verification
-remains a joint Gate 2 task.
+The .NET catalog endpoint, Python catalog client, and graph-backed gateway flow have passed the
+joint A-G live database test. Gate 1 and the functional Gate 2 slice are complete; canonical shared
+fixtures and release hardening remain open.
 
 The independently testable Python portion of Week 6 covers the protected route, catalog boundary,
 conversation storage, service credentials, request IDs, production settings, and failure responses.
-Gate 2 is not complete until the same cases pass through the live ASP.NET gateway and real catalog.
 
 Contextual routing never parses prior user or assistant prose and never sends the stored transcript
 to an LLM. Explicit product IDs in the current request take precedence, ambiguous references are
@@ -78,6 +79,25 @@ uv run pytest
 uv run ruff check .
 ```
 
+Week 7 semantic search is optional so ordinary development does not download an ML model. Install
+and enable it explicitly:
+
+```powershell
+uv sync --extra dev --extra semantic
+$env:SEMANTIC_SEARCH_ENABLED = "true"
+uv run uvicorn app.main:app --reload --reload-dir app --port 8000
+```
+
+The model loads lazily on the first search and is cached under `.data/embedding-models`. The FAISS
+index remains in memory and rebuilds only when searchable catalog content changes. Price and stock
+are deliberately excluded from the embedding hash and are taken from the current .NET response;
+cart proposals continue to re-fetch the product before returning an action.
+
+After pre-caching the model, set `EMBEDDING_LOCAL_FILES_ONLY=true` to prevent Hugging Face metadata
+requests in an offline environment. Staging and production additionally require
+`EMBEDDING_REVISION` to be the model's immutable 40-character commit SHA; a mutable label such as
+`main`, a missing revision, or a non-local model policy fails configuration validation.
+
 Expected health response:
 
 ```json
@@ -111,7 +131,7 @@ Invoke-RestMethod `
 
 The header value must match `INTERNAL_SERVICE_KEY` in the untracked `.env` file.
 
-## Joint Week 6 handoff
+## Joint integration handoff
 
 The public request continues to go to ASP.NET at `POST /api/Assistant/chat` and contains only
 `message`, optional `conversationId`, and optional `cartId`. ASP.NET builds trusted `cart.items`
@@ -119,10 +139,10 @@ and `shopper.preferences` context, then calls this service at `POST /api/chat`. 
 catalog from ASP.NET at `GET /api/assistant/catalog` using `pageIndex`, `pageSize`, `search`, and
 the existing filter query names.
 
-Before Gate 2 is approved, run search, details, stock, comparison, substitution, contextual
-follow-up, and cart-proposal cases through the live ASP.NET gateway. Also verify invalid service
-keys, a stopped FastAPI process, catalog timeouts, malformed downstream responses, and preserved
-conversation IDs. Python intentionally accepts the currently omitted `storageInstructions` and
+The Week 6 joint run covered search, details, stock, comparison, substitution, contextual follow-up,
+cart proposals, invalid service keys, stopped FastAPI behavior, preserved conversation IDs, and no
+cart mutation. After Week 7, repeat one semantic search such as `outdoor footwear under $200`
+through ASP.NET. Python intentionally accepts the currently omitted `storageInstructions` and
 `shelfLifeDays` fields as `null`; their authoritative projection remains .NET-owned.
 
 ## Contract handoff

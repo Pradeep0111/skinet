@@ -1,8 +1,12 @@
+import re
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal, Self
 
 from pydantic import AnyHttpUrl, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_IMMUTABLE_MODEL_REVISION = re.compile(r"[0-9a-fA-F]{40}")
 
 
 class Settings(BaseSettings):
@@ -35,6 +39,12 @@ class Settings(BaseSettings):
     request_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
     chat_timeout_seconds: float = Field(default=20.0, gt=0, le=25)
     max_message_length: int = Field(default=1_000, ge=1, le=10_000)
+    semantic_search_enabled: bool = False
+    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    embedding_revision: str | None = None
+    embedding_local_files_only: bool = False
+    embedding_cache_path: Path = Path(".data/embedding-models")
+    semantic_search_timeout_seconds: float = Field(default=8.0, gt=0, le=15)
 
     @model_validator(mode="after")
     def validate_provider_settings(self) -> Self:
@@ -61,6 +71,19 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "The .NET catalog must use verified HTTPS outside development and test"
                 )
+            if self.semantic_search_enabled:
+                if not self.embedding_local_files_only:
+                    raise ValueError(
+                        "Semantic search outside development and test requires "
+                        "EMBEDDING_LOCAL_FILES_ONLY=true"
+                    )
+                if not self.embedding_revision or not _IMMUTABLE_MODEL_REVISION.fullmatch(
+                    self.embedding_revision
+                ):
+                    raise ValueError(
+                        "Semantic search outside development and test requires "
+                        "EMBEDDING_REVISION to be an immutable 40-character commit SHA"
+                    )
         return self
 
 

@@ -124,7 +124,12 @@ class CatalogClient:
                 page_size=page.page_size,
             )
 
-    async def list_products(self, *, max_items: int = 500) -> list[AssistantProduct]:
+    async def list_products(
+        self,
+        *,
+        max_items: int = 500,
+        require_complete: bool = False,
+    ) -> list[AssistantProduct]:
         if not 1 <= max_items <= 1_000:
             raise ValueError("max_items must be between 1 and 1000")
 
@@ -143,6 +148,10 @@ class CatalogClient:
             if page.page_index * page.page_size >= page.count or not page.data:
                 break
             page_index += 1
+        if require_complete and page.count > len(products):
+            raise CatalogContractError(
+                f"The .NET catalog exceeds the configured {max_items}-product limit."
+            )
         return products
 
     @staticmethod

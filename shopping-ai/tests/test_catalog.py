@@ -420,6 +420,33 @@ async def test_catalog_client_rejects_duplicate_products_across_pages() -> None:
 
 
 @pytest.mark.asyncio
+async def test_catalog_client_rejects_truncated_complete_snapshot() -> None:
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(
+            200,
+            json={
+                "pageIndex": 1,
+                "pageSize": 50,
+                "count": 51,
+                "data": _product_payloads(range(1, 51)),
+            },
+            request=request,
+        )
+
+    client = CatalogClient(
+        base_url="https://dotnet.test",
+        service_key="catalog-secret",
+        timeout_seconds=2,
+        transport=httpx2.MockTransport(handler),
+    )
+    try:
+        with pytest.raises(CatalogContractError, match="exceeds"):
+            await client.list_products(max_items=50, require_complete=True)
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
 async def test_catalog_tools_are_read_only_and_return_current_stock() -> None:
     product = AssistantProduct.model_validate(_product_payload())
     client = AsyncMock()
@@ -429,6 +456,7 @@ async def test_catalog_tools_are_read_only_and_return_current_stock() -> None:
         count=1,
         data=[product],
     )
+    client.list_products.return_value = [product]
     client.get_product.return_value = product
     tools = CatalogTools(client)
 
@@ -444,3 +472,58 @@ async def test_catalog_tools_are_read_only_and_return_current_stock() -> None:
     assert stock.available is True
     assert stock.quantity_in_stock == 40
     assert not hasattr(tools, "add_to_cart")
+
+
+@pytest.mark.asyncio
+async def test_catalog_tools_delegate_search_without_changing_live_detail_client() -> None:
+    product = AssistantProduct.model_validate(_product_payload())
+    client = AsyncMock(spec=CatalogClient)
+    product_search = AsyncMock()
+    product_search.search_products.return_value = [product]
+    tools = CatalogTools(client, product_search=product_search)
+
+    results = await tools.search_products(
+        "fresh fruit",
+        max_price=Decimal("5"),
+    )
+
+    assert results == [product]
+    product_search.search_products.assert_awaited_once()
+    assert product_search.search_products.await_args.kwargs["filters"].max_price == Decimal(
+        "5"
+    )
+    client.search_products.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_keyword_only_search_filters_promotions_by_effective_price() -> None:
+    product = AssistantProduct.model_validate(_product_payload())
+    client = AsyncMock(spec=CatalogClient)
+    client.search_products.return_value = CatalogPage(
+        page_index=1,
+        page_size=50,
+        count=1,
+        data=[product],
+    )
+    client.list_products.return_value = [product]
+    tools = CatalogTools(client)
+
+    under_sale_price = await tools.search_products(
+        "banana",
+        max_price=Decimal("1.50"),
+    )
+    above_sale_price = await tools.search_products(
+        "banana",
+        min_price=Decimal("1.50"),
+    )
+
+    assert under_sale_price == [product]
+    assert above_sale_price == []
+    for awaited_call in client.search_products.await_args_list:
+        assert awaited_call.kwargs["page_size"] == 50
+        assert awaited_call.kwargs["filters"].min_price is None
+        assert awaited_call.kwargs["filters"].max_price is None
+    client.list_products.assert_awaited_with(
+        max_items=1_000,
+        require_complete=True,
+    )

@@ -1,10 +1,16 @@
 import asyncio
 from collections.abc import Callable
+from dataclasses import replace
 from decimal import Decimal
 from uuid import uuid4
 
 from app.models import AssistantProduct, ProductComparison, ProposedAction, StockCheck
-from app.services.catalog import CatalogClient, CatalogFilters
+from app.services.catalog import CatalogClient, CatalogClientError, CatalogFilters
+from app.services.retrieval import (
+    ProductSearch,
+    keyword_ranked_products,
+    matches_catalog_filters,
+)
 
 TOOL_ALLOWLIST = frozenset(
     {
@@ -30,9 +36,11 @@ class CatalogTools:
         client: CatalogClient,
         *,
         action_id_factory: Callable[[], str] | None = None,
+        product_search: ProductSearch | None = None,
     ) -> None:
         self._client = client
         self._action_id_factory = action_id_factory or (lambda: str(uuid4()))
+        self._product_search = product_search
 
     async def search_products(
         self,
@@ -54,19 +62,43 @@ class CatalogTools:
         if min_price is not None and max_price is not None and min_price > max_price:
             raise ValueError("min_price cannot exceed max_price")
 
+        filters = CatalogFilters(
+            categories=(category,) if category else (),
+            dietary_labels=dietary_labels,
+            allergens_excluded=allergens_excluded,
+            min_price=min_price,
+            max_price=max_price,
+            in_stock=in_stock,
+        )
+        if self._product_search is not None:
+            return await self._product_search.search_products(
+                normalized_keyword,
+                limit=limit,
+                filters=filters,
+            )
+        upstream_filters = replace(filters, min_price=None, max_price=None)
         page = await self._client.search_products(
             query=normalized_keyword,
-            page_size=limit,
-            filters=CatalogFilters(
-                categories=(category,) if category else (),
-                dietary_labels=dietary_labels,
-                allergens_excluded=allergens_excluded,
-                min_price=min_price,
-                max_price=max_price,
-                in_stock=in_stock,
+            page_size=(
+                50
+                if filters.min_price is not None or filters.max_price is not None
+                else limit
             ),
+            filters=upstream_filters,
         )
-        return page.data
+        page_products = [
+            product for product in page.data if matches_catalog_filters(product, filters)
+        ]
+        if filters.min_price is None and filters.max_price is None:
+            return page_products[:limit]
+        try:
+            catalog = await self._client.list_products(
+                max_items=1_000,
+                require_complete=True,
+            )
+        except CatalogClientError:
+            return page_products[:limit]
+        return keyword_ranked_products(catalog, normalized_keyword, filters)[:limit]
 
     async def get_product_details(self, product_id: int) -> AssistantProduct:
         return await self._client.get_product(product_id)

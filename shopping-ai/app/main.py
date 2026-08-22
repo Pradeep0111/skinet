@@ -20,6 +20,12 @@ from app.services.catalog import CatalogClient, create_catalog_client
 from app.services.conversation import ConversationStore, create_conversation_store
 from app.services.llm import LLMProvider, LLMService
 from app.services.llm.factory import create_llm_provider
+from app.services.retrieval import (
+    FaissCatalogIndex,
+    HybridProductSearch,
+    ProductSearch,
+    SentenceTransformerEmbeddingProvider,
+)
 from app.tools import CatalogTools
 
 
@@ -29,11 +35,28 @@ def create_app(
     llm_provider: LLMProvider | None = None,
     conversation_store: ConversationStore | None = None,
     catalog_client: CatalogClient | None = None,
+    product_search: ProductSearch | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
     configure_logging(resolved_settings.log_level)
     resolved_store = conversation_store or create_conversation_store(resolved_settings)
     resolved_catalog_client = catalog_client or create_catalog_client(resolved_settings)
+    resolved_product_search = product_search
+    if resolved_product_search is None and resolved_settings.semantic_search_enabled:
+        embedding_provider = SentenceTransformerEmbeddingProvider(
+            model_name=resolved_settings.embedding_model,
+            cache_path=resolved_settings.embedding_cache_path,
+            revision=resolved_settings.embedding_revision,
+            local_files_only=resolved_settings.embedding_local_files_only,
+        )
+        semantic_index = FaissCatalogIndex(
+            embedding_provider,
+            timeout_seconds=resolved_settings.semantic_search_timeout_seconds,
+        )
+        resolved_product_search = HybridProductSearch(
+            resolved_catalog_client,
+            semantic_index,
+        )
 
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
@@ -60,7 +83,11 @@ def create_app(
     application.state.settings = resolved_settings
     application.state.conversation_store = resolved_store
     application.state.catalog_client = resolved_catalog_client
-    application.state.catalog_tools = CatalogTools(resolved_catalog_client)
+    application.state.product_search = resolved_product_search
+    application.state.catalog_tools = CatalogTools(
+        resolved_catalog_client,
+        product_search=resolved_product_search,
+    )
     application.state.shopping_agent = ShoppingAgent(application.state.catalog_tools)
     application.state.llm_service = LLMService(
         llm_provider or create_llm_provider(resolved_settings)
